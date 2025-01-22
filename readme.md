@@ -42,7 +42,7 @@ python main.py -it 5 -ood fashion -c pmnist/mlp-bayesian-bgd -fits
 
 ### Figure MNIST OOD
 
-These are the commands for Fig. 4. Each command runs for about 50 minutes on a RTX 3090.
+These are the commands for Fig. 4. Each command runs for about 50 minutes for non-Bayesian neural networks and 2h30 for Bayesian networks on a RTX 3090.
 
 ```bash
 python main.py -it 5 -ood pmnist -wh -c mnist-ood/mlp-sgd -fits
