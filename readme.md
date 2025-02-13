@@ -49,6 +49,7 @@ python main.py -it 5 -ood pmnist -wh -c mnist-ood/mlp-sgd -fits
 python main.py -it 5 -ood pmnist -wh -c mnist-ood/mlp-stream-ewc-sgd -fits
 python main.py -it 5 -ood pmnist -wh -c mnist-ood/mlp-bayesian-bgd -fits
 python main.py -it 5 -ood pmnist -wh -c mnist-ood/mlp-bayesian-mesu -fits
+python main.py -it 5 -ood fashion -wh -c mnist-ood/mlp-bayesian-mesu-high-N -fits
 ```
 
 ## Files for figures
