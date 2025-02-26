@@ -74,6 +74,9 @@ if __name__ == "__main__":
         if "ewc" in configuration:
             ewc_parameters = deepcopy(configuration["ewc"])
             FOLDER += f"-ewc={configuration['ewc']['importance']}"
+        if "si" in configuration:
+            si_parameters = deepcopy(configuration["si"])
+            FOLDER += f"-si={configuration['si']['coefficient']}"
         if "use_bias" in configuration["network_params"]:
             FOLDER += "-bias"
         SAVE_PATH = os.path.join(MAIN_FOLDER, FOLDER)
@@ -123,6 +126,7 @@ if __name__ == "__main__":
                 old_param = eqx.filter(model, eqx.is_array)
                 fisher = map(lambda x: jnp.zeros_like(x), old_param)
                 return old_param, fisher
+            
             if ewc_parameters is not None:
                 old_param, fisher = initialize_ewc_parameters(model)
                 old_param = map(lambda x: expand_dims(x, 0).repeat(
@@ -136,6 +140,17 @@ if __name__ == "__main__":
             if ewc_streaming_parameters is not None:
                 ewc_streaming_parameters["old_param"], ewc_streaming_parameters["fisher"] = initialize_ewc_parameters(
                     model)
+                
+            def initialize_si_parameters(model):
+                old_param = eqx.filter(model, eqx.is_array)
+                omega = map(lambda x: jnp.zeros_like(x), old_param)
+                w_k = map(lambda x: jnp.zeros_like(x), old_param)
+                return old_param, omega, w_k
+                
+            if si_parameters is not None:
+                si_parameters["old_param"], si_parameters["omega"], si_parameters["w_k"] = initialize_si_parameters(
+                    model)
+                
             # GENERATING A HUGE ARRAY OF KEYS, ASSURING THAT THE KEYS ARE UNIQUE
             trkey, tekey, rng = jax.random.split(rng, 3)
             training_core_keys = jax.random.split(
@@ -183,7 +198,7 @@ if __name__ == "__main__":
                             f"Task {task+1}/{configuration['n_tasks']} - Epoch {epoch+1}/{configuration['epochs']}")
                     train_ck = training_core_keys[task_id, epoch]
                     test_ck = test_core_keys[task_id, epoch]
-                    model, opt_state, losses, ewc_streaming_parameters, model_state = train_fn(
+                    model, opt_state, losses, ewc_streaming_parameters, model_state, si_parameters = train_fn(
                         model=model,
                         dataset=task_train_dataloader,
                         num_classes=num_classes,
@@ -194,6 +209,7 @@ if __name__ == "__main__":
                         ewc_online_parameters=ewc_online_parameters,
                         ewc_streaming_parameters=ewc_streaming_parameters,
                         ewc_parameters=ewc_parameters,
+                        si_parameters=si_parameters,
                         init_state=model_state,
                     )
                     accuracies, predictions = main_test_fn(
@@ -274,6 +290,19 @@ if __name__ == "__main__":
                                                           ewc_parameters["old_param"], eqx.filter(model, eqx.is_array))
                         ewc_parameters["fisher"] = map(lambda old, new: old.at[task_id].set(new),
                                                        ewc_parameters["fisher"], fisher)
+                if si_parameters is not None:
+                    epsilon = 1e-5 
+                    difference = map(lambda old, new: (new - old)**2, si_parameters["old_param"], eqx.filter(model, eqx.is_array))
+                    si_parameters["omega"] = map(lambda omega, diff, w: omega + relu(w/(diff + epsilon)), 
+                                                 si_parameters["omega"], 
+                                                 difference, 
+                                                 si_parameters["w_k"])
+                    si_parameters["w_k"] = map(lambda x: jnp.zeros_like(x), si_parameters["w_k"])
+                    si_parameters["old_param"] = eqx.filter(
+                        model, eqx.is_array)
+                    
+                    
+                    
         except (KeyboardInterrupt, SystemExit, Exception):
             print(traceback.format_exc())
             rmtree(SAVE_PATH)
