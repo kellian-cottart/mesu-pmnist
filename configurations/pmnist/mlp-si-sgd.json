@@ -6,13 +6,13 @@
   },
   "optimizer": "sgd",
   "optimizer_params": {
-    "lr": 0.005
+    "lr": 0.01
   },
   "task": "PermutedMNIST",
   "n_tasks": 200,
   "epochs": 1,
   "si": {
-    "coefficient": 1e-8
+    "coefficient": 1e-9
   },
   "train_batch_size": 1,
   "test_batch_size": 128,
