@@ -291,7 +291,7 @@ if __name__ == "__main__":
                         ewc_parameters["fisher"] = map(lambda old, new: old.at[task_id].set(new),
                                                        ewc_parameters["fisher"], fisher)
                 if si_parameters is not None:
-                    epsilon = 1e-5 
+                    epsilon = si_parameters["damping_factor"]
                     difference = map(lambda old, new: (new - old)**2, si_parameters["old_param"], eqx.filter(model, eqx.is_array))
                     si_parameters["omega"] = map(lambda omega, diff, w: omega + relu(w/(diff + epsilon)), 
                                                  si_parameters["omega"], 
