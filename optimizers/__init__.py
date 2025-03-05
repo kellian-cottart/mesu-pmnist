@@ -1,3 +1,4 @@
 from .mesu import *
 from .sgd import *
-from .bgd import *
+from .foovbdiagonal import *
+from .foovbmatrixvariate import *

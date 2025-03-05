@@ -9,12 +9,12 @@ def discriminant(param):
     return hasattr(param, 'mu') and hasattr(param, 'sigma') and param.mu is not None and param.sigma is not None
 
 
-def bgd(
+def foovbdiagonal(
         lr_mu: float = 1,
         lr_sigma: float = 1,
         clamp_grad: float = 0.) -> optax.GradientTransformation:
     """
-    Optax gradient transformation for MESU.
+    Optax gradient transformation for foovb-diagonal.
 
     Args:
         lr_mu: Learning rate for mu parameters.

@@ -13,6 +13,7 @@ def configure_networks(configuration, rng):
         "mlp": BaseMLP,
         "mlpbatchnorm": MLPBatchNorm,
         "mlplayernorm": MLPLayerNorm,
+        "matrixvariatemlp":BaseMatrixVariateMLP,
     }
     if not "network_params" in configuration:
         raise ValueError("Network parameters 'network_params' not found")
@@ -50,7 +51,8 @@ def configure_optimizer(configuration, model):
         "sgd": sgd,
         "adam": optax.adam,
         "mesu": mesu,
-        "bgd": bgd,
+        "foovbdiagonal": foovbdiagonal,
+        "foovbmatrixvariate": foovbmatrixvariate,
     }
     if not "optimizer_params" in configuration:
         raise ValueError("Optimizer parameters not found")

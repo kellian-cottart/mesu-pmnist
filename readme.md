@@ -36,7 +36,7 @@ python main.py -it 5 -ood fashion -c pmnist/mlp-sgd -fits
 python main.py -it 5 -ood fashion -c pmnist/mlp-online-ewc-sgd -fits
 python main.py -it 5 -ood fashion -c pmnist/mlp-stream-ewc-sgd -fits
 python main.py -it 5 -ood fashion -c pmnist/mlp-bayesian-mesu -fits
-python main.py -it 5 -ood fashion -c pmnist/mlp-bayesian-bgd -fits
+python main.py -it 5 -ood fashion -c pmnist/mlp-bayesian-foovbdiagonal -fits
 python main.py -it 5 -ood fashion -c pmnist/mlp-si-sgd -fits
 
 ```
@@ -48,7 +48,7 @@ These are the commands for Fig. 4. Each command runs for about 50 minutes for no
 ```bash
 python main.py -it 5 -ood pmnist -wh -c mnist-ood/mlp-sgd -fits
 python main.py -it 5 -ood pmnist -wh -c mnist-ood/mlp-stream-ewc-sgd -fits
-python main.py -it 5 -ood pmnist -wh -c mnist-ood/mlp-bayesian-bgd -fits
+python main.py -it 5 -ood pmnist -wh -c mnist-ood/mlp-bayesian-foovbdiagonal -fits
 python main.py -it 5 -ood pmnist -wh -c mnist-ood/mlp-bayesian-mesu -fits
 python main.py -it 5 -ood pmnist -wh -c mnist-ood/mlp-bayesian-mesu-high-N -fits
 ```
