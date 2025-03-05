@@ -65,6 +65,7 @@ if __name__ == "__main__":
         ewc_parameters = None
         ewc_streaming_parameters = None
         ewc_online_parameters = None
+        si_parameters = None
         if "stream-ewc" in configuration:
             ewc_streaming_parameters = deepcopy(configuration["stream-ewc"])
             FOLDER += f"-stream-ewc={configuration['stream-ewc']['importance']}"

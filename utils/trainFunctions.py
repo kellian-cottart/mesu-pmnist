@@ -203,6 +203,7 @@ def batch_fn(dynamic_state, opt_state, keys, optimizer, images, labels, state, s
     model = eqx.combine(dynamic_state, static_state)
     (loss, state), grads = loss_fn(
         model, images, labels, samples, keys, ewc_online_parameters, ewc_streaming_parameters, ewc_parameters, si_parameters, state)
+    jax.debug.print("{x}", x=loss)
     # Update the model using the optimizer
     dynamic_state = eqx.partition(model, eqx.is_array)[0]
     updates, opt_state = optimizer.update(grads, opt_state, dynamic_state)

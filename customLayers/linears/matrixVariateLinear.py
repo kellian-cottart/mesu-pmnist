@@ -53,9 +53,9 @@ class MatrixVariateLinear(Module, strict=True):
             sigma_2=ones((wshape[0], wshape[0]), dtype) * 0.5 * lim,
         )
         self.bias = MatrixVariateParameter(
-            mu=uniform(bkey, bshape, minval=-lim, maxval=lim),
-            sigma_1=ones(bshape, dtype) * 0.5 * lim,
-            sigma_2=ones(bshape, dtype) * 0.5 * lim,
+            mu=uniform(bkey, bshape, minval=-lim, maxval=lim) if use_bias else None,
+            sigma_1=ones(bshape, dtype) * 0.5 * lim if use_bias else None,
+            sigma_2=ones(bshape, dtype) * 0.5 * lim if use_bias else None,
         )
         self.in_features = in_features
         self.out_features = out_features
