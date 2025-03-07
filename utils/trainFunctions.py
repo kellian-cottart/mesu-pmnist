@@ -148,7 +148,6 @@ def matrixvariate_loss_fn(model, images, labels, samples, rng, init_state=None):
         reparam_model_dynamic = map(reparam_model_dynamic, dynamic, noise_tree, is_leaf=discriminant)
         # Combine the reparameterized dynamic part with the static part
         reparam_model = eqx.combine(reparam_model_dynamic, static)
-        
         @eqx.filter_value_and_grad(has_aux=True)
         def loss_fn(model, images, labels, init_state):
             # Compute predictions using the reparameterized model
@@ -159,7 +158,6 @@ def matrixvariate_loss_fn(model, images, labels, samples, rng, init_state=None):
             # Compute the loss
             loss = -jnp.sum(output, axis=-1).sum()
             return loss, state
-        
         # Compute the loss and gradients
         (losses, state), grads = loss_fn(
             reparam_model, images, labels, init_state)

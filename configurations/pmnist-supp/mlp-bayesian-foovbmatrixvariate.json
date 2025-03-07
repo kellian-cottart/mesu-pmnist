@@ -11,12 +11,12 @@
     "clamp_grad": 0
   },
   "task": "PermutedMNIST",
-  "n_train_samples": 50,
-  "n_test_samples": 50,
+  "n_train_samples": 10,
+  "n_test_samples": 10,
   "n_tasks": 25,
   "epochs": 10,
   "train_batch_size": 256,
-  "test_batch_size": 256,
+  "test_batch_size": 1000,
   "max_parallel_permutation": 100,
-  "seed": 10222
+  "seed": 1000
 }
