@@ -6,6 +6,8 @@ from jax.numpy import ravel
 from jax import vmap
 from equinox.nn import LayerNorm, BatchNorm
 
+import jax
+
 
 class BaseMatrixVariateMLP(Module):
     layers: list[MatrixVariateLinear]
@@ -34,19 +36,22 @@ class BaseMatrixVariateMLP(Module):
                 self.layers.append(activation_fn)
 
     def __call__(self, x, state, samples, key, *, backwards=False):
-        s_key, key = split(key, 2)
-        samples_keys = split(s_key, samples)
         x = ravel(x)
-        x = vmap(forward, in_axes=(None, None, 0))(
-            x, self.layers, samples_keys)
+        if backwards:
+            for layer in self.layers:
+                x = layer(x)
+        else:
+            s_key = split(key, samples)
+
+            def forward(x, layers, s_l_key):
+                for layer in layers:
+                    if isinstance(layer, MatrixVariateLinear):
+                        l_key, s_l_key = split(s_l_key, 2)
+                        x = layer.sample(x, key=l_key)
+                    else:
+                        x = layer(x)
+                return x
+            x = vmap(forward, in_axes=(None, None, 0))(x, self.layers, s_key)
+
         return x, state
 
-
-def forward(x, layers, key):
-    for i, layer in enumerate(layers):
-        if isinstance(layer, MatrixVariateLinear):
-            l_key, key = split(key, 2)
-            x = layer(x, key=l_key)
-        else:   # activation function
-            x = layer(x)
-    return x

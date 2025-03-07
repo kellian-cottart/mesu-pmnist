@@ -8,7 +8,7 @@ from jax.lax import tanh, log
 from jax.random import split, uniform
 from torch.utils.data import DataLoader
 import jax.numpy as jnp
-
+from models import BaseMatrixVariateMLP
 
 @eqx.filter_jit
 def loss_fn(model, images, labels, samples=None, rng=None, ewc_online_parameters=None, ewc_streaming_parameters=None, ewc_parameters=None, si_parameters=None, init_state=None):
@@ -25,7 +25,10 @@ def loss_fn(model, images, labels, samples=None, rng=None, ewc_online_parameters
     Returns:
         The computed loss and gradients.
     """
-    if samples is not None:
+    if isinstance(model, BaseMatrixVariateMLP):
+        loss_fn_to_use = matrixvariate_loss_fn
+        loss_args = (model, images, labels, samples, rng, init_state)
+    elif samples is not None:
         loss_fn_to_use = bayesian_loss_fn
         loss_args = (model, images, labels, samples, rng, init_state)
     elif any(param is not None for param in [ewc_online_parameters, ewc_streaming_parameters, ewc_parameters]):
@@ -104,6 +107,90 @@ def deterministic_loss_fn(model, images, labels, init_state=None):
     # mean reduction only on deterministic models
     loss = -jnp.sum(output, axis=-1).mean()
     return loss, state
+
+
+def matrixvariate_loss_fn(model, images, labels, samples, rng, init_state=None):
+    """ Loss function for Bayesian models. """
+    # Split the random key for each sample
+    samples_rng = jax.random.split(rng, samples)
+    
+    def discriminant(param):
+        """ Discriminate between Bayesian parameters"""
+        return hasattr(param, 'mu') and hasattr(param, 'sigma_1') and hasattr(param, 'sigma_2') and param.mu is not None and param.sigma_1 is not None and param.sigma_2 is not None
+
+    def closure(model, samples_rng, init_state):
+        # Partition the model into dynamic and static parts
+        dynamic, static = eqx.partition(model, eqx.is_array)
+        # Create a structure copy of the model
+        struct_copy = structure(model)
+        # Split the random keys for each leaf in the model
+        rkeys = split(samples_rng, struct_copy.num_leaves)
+        def make_noise(x, l_key):
+            # Generate gaussian noise
+            return MatrixVariateParameter(
+                mu=jax.random.normal(l_key.mu, x.mu.shape),
+                sigma_1=x.sigma_1,
+                sigma_2=x.sigma_2
+            )
+
+        def reparam_model_dynamic(param, noise):
+            # Apply reparameterization trick with tanh
+            return MatrixVariateParameter(
+                mu=param.mu + (param.sigma_2 @ noise.mu @ param.sigma_1.T),
+                sigma_1=param.sigma_1,
+                sigma_2=param.sigma_2
+            )
+            
+        unflattened_keys = unflatten(struct_copy, rkeys)
+        # Generate noise for the dynamic part of the model
+        noise_tree = map(make_noise, dynamic, unflattened_keys, is_leaf=discriminant)
+        # Reparameterize the dynamic part of the model
+        reparam_model_dynamic = map(reparam_model_dynamic, dynamic, noise_tree, is_leaf=discriminant)
+        # Combine the reparameterized dynamic part with the static part
+        reparam_model = eqx.combine(reparam_model_dynamic, static)
+        
+        @eqx.filter_value_and_grad(has_aux=True)
+        def loss_fn(model, images, labels, init_state):
+            # Compute predictions using the reparameterized model
+            predictions, state = jax.vmap(ft.partial(model, backwards=True), axis_name="batch", in_axes=(
+                0, None, None, None), out_axes=(0, None))(images, init_state, samples, samples_rng)
+            # Compute the log softmax of the predictions
+            output = jax.nn.log_softmax(predictions, axis=-1) * labels
+            # Compute the loss
+            loss = -jnp.sum(output, axis=-1).sum()
+            return loss, state
+        
+        # Compute the loss and gradients
+        (losses, state), grads = loss_fn(
+            reparam_model, images, labels, init_state)
+        return losses, grads, noise_tree, state
+    # Vectorize the closure function over the samples
+    losses, grads, noise_tree, state = jax.vmap(
+        closure, in_axes=(None, 0, None), out_axes=(0, 0, 0, None))(model, samples_rng, init_state)
+    def grad_on_mu(grad, param, noise):
+        """ Compute the gradients """
+        mu_grads = grad.mu.mean(axis=0)
+        mu_transpose = jnp.einsum('soi -> sio', grad.mu)
+        noise_transpose = jnp.einsum('sab -> sba', noise.mu)
+        # Compute the gradients for sigma_1 and sigma_2
+        mu_sig_2 = jnp.einsum('sio, od -> sid', mu_transpose, param.sigma_2)
+        noise_mu_sig_2 = jnp.einsum('sid, sab -> sib', mu_sig_2, noise.mu)
+        sigma_1_grads = jnp.mean(noise_mu_sig_2, axis=0)/param.sigma_2.shape[0]
+        mu_sig_1 = jnp.einsum('soi, ib -> sob', grad.mu, param.sigma_1)
+        noise_mu_sig_1 = jnp.einsum('sob, sba -> soa', mu_sig_1, noise_transpose) 
+        sigma_2_grads = jnp.mean(noise_mu_sig_1, axis=0)/param.sigma_1.shape[0]
+        # Return the gradients
+        return MatrixVariateParameter(
+            mu=mu_grads,
+            sigma_1=sigma_1_grads,
+            sigma_2=sigma_2_grads
+        )
+    mean_loss = jnp.mean(losses)
+    jax.debug.print("{x}", x=mean_loss)
+    # Adjust the gradients
+    grads = map(ft.partial(grad_on_mu), grads, eqx.filter(
+        model, eqx.is_array), eqx.filter(noise_tree, eqx.is_array), is_leaf=discriminant)
+    return (mean_loss, state), grads
 
 
 def train_fn(model, dataset, num_classes, opt_state, optimizer, train_ck, train_samples=None, ewc_online_parameters=None, ewc_streaming_parameters=None, ewc_parameters=None, si_parameters=None, init_state=None):
@@ -203,11 +290,10 @@ def batch_fn(dynamic_state, opt_state, keys, optimizer, images, labels, state, s
     model = eqx.combine(dynamic_state, static_state)
     (loss, state), grads = loss_fn(
         model, images, labels, samples, keys, ewc_online_parameters, ewc_streaming_parameters, ewc_parameters, si_parameters, state)
-    jax.debug.print("{x}", x=loss)
     # Update the model using the optimizer
     dynamic_state = eqx.partition(model, eqx.is_array)[0]
     updates, opt_state = optimizer.update(grads, opt_state, dynamic_state)
-    dynamic_state = optax.apply_updates(dynamic_state, updates)    
+    dynamic_state = optax.apply_updates(dynamic_state, updates) 
     if si_parameters is not None:
         si_parameters["w_k"] = map(
             lambda w_k, grad, old, new: w_k - grad * (new-old), 

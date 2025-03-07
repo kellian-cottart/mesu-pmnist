@@ -127,7 +127,7 @@ if __name__ == "__main__":
                 old_param = eqx.filter(model, eqx.is_array)
                 fisher = map(lambda x: jnp.zeros_like(x), old_param)
                 return old_param, fisher
-            
+
             if ewc_parameters is not None:
                 old_param, fisher = initialize_ewc_parameters(model)
                 old_param = map(lambda x: expand_dims(x, 0).repeat(
@@ -141,17 +141,17 @@ if __name__ == "__main__":
             if ewc_streaming_parameters is not None:
                 ewc_streaming_parameters["old_param"], ewc_streaming_parameters["fisher"] = initialize_ewc_parameters(
                     model)
-                
+
             def initialize_si_parameters(model):
                 old_param = eqx.filter(model, eqx.is_array)
                 omega = map(lambda x: jnp.zeros_like(x), old_param)
                 w_k = map(lambda x: jnp.zeros_like(x), old_param)
                 return old_param, omega, w_k
-                
+
             if si_parameters is not None:
                 si_parameters["old_param"], si_parameters["omega"], si_parameters["w_k"] = initialize_si_parameters(
                     model)
-                
+
             # GENERATING A HUGE ARRAY OF KEYS, ASSURING THAT THE KEYS ARE UNIQUE
             trkey, tekey, rng = jax.random.split(rng, 3)
             training_core_keys = jax.random.split(
@@ -293,17 +293,17 @@ if __name__ == "__main__":
                                                        ewc_parameters["fisher"], fisher)
                 if si_parameters is not None:
                     epsilon = si_parameters["damping_factor"]
-                    difference = map(lambda old, new: (new - old)**2, si_parameters["old_param"], eqx.filter(model, eqx.is_array))
-                    si_parameters["omega"] = map(lambda omega, diff, w: omega + relu(w/(diff + epsilon)), 
-                                                 si_parameters["omega"], 
-                                                 difference, 
+                    difference = map(lambda old, new: (
+                        new - old)**2, si_parameters["old_param"], eqx.filter(model, eqx.is_array))
+                    si_parameters["omega"] = map(lambda omega, diff, w: omega + relu(w/(diff + epsilon)),
+                                                 si_parameters["omega"],
+                                                 difference,
                                                  si_parameters["w_k"])
-                    si_parameters["w_k"] = map(lambda x: jnp.zeros_like(x), si_parameters["w_k"])
+                    si_parameters["w_k"] = map(
+                        lambda x: jnp.zeros_like(x), si_parameters["w_k"])
                     si_parameters["old_param"] = eqx.filter(
                         model, eqx.is_array)
-                    
-                    
-                    
+
         except (KeyboardInterrupt, SystemExit, Exception):
             print(traceback.format_exc())
             rmtree(SAVE_PATH)
