@@ -42,7 +42,6 @@ class BaseMatrixVariateMLP(Module):
                 x = layer(x)
         else:
             s_key = split(key, samples)
-
             def forward(x, layers, s_l_key):
                 for layer in layers:
                     if isinstance(layer, MatrixVariateLinear):

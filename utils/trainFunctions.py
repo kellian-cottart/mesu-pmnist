@@ -112,7 +112,7 @@ def deterministic_loss_fn(model, images, labels, init_state=None):
 def matrixvariate_loss_fn(model, images, labels, samples, rng, init_state=None):
     """ Loss function for Bayesian models. """
     # Split the random key for each sample
-    samples_rng = jax.random.split(rng, samples)
+    samples_rng = split(rng, samples)
     
     def discriminant(param):
         """ Discriminate between Bayesian parameters"""
@@ -122,7 +122,7 @@ def matrixvariate_loss_fn(model, images, labels, samples, rng, init_state=None):
         # Partition the model into dynamic and static parts
         dynamic, static = eqx.partition(model, eqx.is_array)
         # Create a structure copy of the model
-        struct_copy = structure(model)
+        struct_copy = structure(dynamic)
         # Split the random keys for each leaf in the model
         rkeys = split(samples_rng, struct_copy.num_leaves)
         def make_noise(x, l_key):
@@ -134,9 +134,10 @@ def matrixvariate_loss_fn(model, images, labels, samples, rng, init_state=None):
             )
 
         def reparam_model_dynamic(param, noise):
-            # Apply reparameterization trick with tanh
+            sampling = param.mu 
+            #sampling += (param.sigma_2 @ noise.mu @ param.sigma_1.T)
             return MatrixVariateParameter(
-                mu=param.mu + (param.sigma_2 @ noise.mu @ param.sigma_1.T),
+                mu=sampling,
                 sigma_1=param.sigma_1,
                 sigma_2=param.sigma_2
             )
@@ -149,14 +150,12 @@ def matrixvariate_loss_fn(model, images, labels, samples, rng, init_state=None):
         # Combine the reparameterized dynamic part with the static part
         reparam_model = eqx.combine(reparam_model_dynamic, static)
         @eqx.filter_value_and_grad(has_aux=True)
-        def loss_fn(model, images, labels, init_state):
-            # Compute predictions using the reparameterized model
-            predictions, state = jax.vmap(ft.partial(model, backwards=True), axis_name="batch", in_axes=(
+        def loss_fn(param_model, images, labels, init_state):
+            # Compute predicti ons using the reparameterized model
+            predictions, state = jax.vmap(ft.partial(param_model, backwards=True), axis_name="batch", in_axes=(
                 0, None, None, None), out_axes=(0, None))(images, init_state, samples, samples_rng)
-            # Compute the log softmax of the predictions
             output = jax.nn.log_softmax(predictions, axis=-1) * labels
-            # Compute the loss
-            loss = -jnp.sum(output, axis=-1).sum()
+            loss = -jnp.sum(output, axis=-1).mean()
             return loss, state
         # Compute the loss and gradients
         (losses, state), grads = loss_fn(
@@ -184,7 +183,6 @@ def matrixvariate_loss_fn(model, images, labels, samples, rng, init_state=None):
             sigma_2=sigma_2_grads
         )
     mean_loss = jnp.mean(losses)
-    jax.debug.print("{x}", x=mean_loss)
     # Adjust the gradients
     grads = map(ft.partial(grad_on_mu), grads, eqx.filter(
         model, eqx.is_array), eqx.filter(noise_tree, eqx.is_array), is_leaf=discriminant)
