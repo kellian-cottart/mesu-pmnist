@@ -184,7 +184,7 @@ def matrixvariate_loss_fn(model, images, labels, samples, rng, init_state=None):
         noise_transpose = jnp.einsum('sab -> sba', noise_mu)
         # Compute the gradients for sigma_1 and sigma_2
         mu_sig_2 = jnp.einsum('sio, od -> sid', mu_transpose, param.sigma_2)
-        noise_mu_sig_2 = jnp.einsum('sid, sab -> sib', mu_sig_2, noise_mu)
+        noise_mu_sig_2 = jnp.einsum('sid, sdb -> sib', mu_sig_2, noise_mu)
         sigma_1_grads = jnp.mean(noise_mu_sig_2, axis=0)/param.sigma_2.shape[0]
         mu_sig_1 = jnp.einsum('soi, ib -> sob', mu, param.sigma_1)
         noise_mu_sig_1 = jnp.einsum('sob, sba -> soa', mu_sig_1, noise_transpose) 
