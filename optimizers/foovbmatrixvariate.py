@@ -2,9 +2,7 @@ import optax
 import jax.numpy as jnp
 from jax.tree import map
 from customLayers.linears import MatrixVariateParameter
-import jax
-import torch
-import numpy as np
+import jax.numpy as jnp
 def discriminant(param):
     """ Discriminate between Bayesian parameters"""
     return hasattr(param, 'mu') and hasattr(param, 'sigma_1') and hasattr(param, 'sigma_2') and param.mu is not None and param.sigma_1 is not None and param.sigma_2 is not None
@@ -59,13 +57,18 @@ def foovbmatrixvariate(
 
         def update_matrixvariate(param, grad):
             """ Update the parameters based on the gradients and the prior"""
+            mu = grad.mu
+            if len(grad.mu.shape) == 1:
+                mu = jnp.expand_dims(mu, axis=-1)
             large_sigma_1 = param.sigma_1 @ param.sigma_1.T
             large_sigma_2 = param.sigma_2 @ param.sigma_2.T
-            mu = - lr_mu * large_sigma_2 @ grad.mu @ large_sigma_1
+            mu = - lr_mu * (large_sigma_2 @ mu) @ large_sigma_1
             sigma_1 = solve_matrix_equation(
                 large_sigma_1, grad.sigma_1) - param.sigma_1
             sigma_2 = solve_matrix_equation(
                 large_sigma_2, grad.sigma_2) - param.sigma_2
+            if len(grad.mu.shape) == 1:
+                mu = jnp.squeeze(mu, axis=-1)
             return MatrixVariateParameter(mu, sigma_1, sigma_2)
 
         updates = map(

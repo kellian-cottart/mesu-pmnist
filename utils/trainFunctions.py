@@ -105,7 +105,7 @@ def deterministic_loss_fn(model, images, labels, init_state=None):
                                   in_axes=(0, None), out_axes=(0, None))(images, init_state)
     output = jax.nn.log_softmax(predictions, axis=-1) * labels
     # mean reduction only on deterministic models
-    loss = -jnp.sum(output, axis=-1).mean()
+    loss = -jnp.sum(output, axis=-1).mean() 
     return loss, state
 
 
@@ -134,12 +134,20 @@ def matrixvariate_loss_fn(model, images, labels, samples, rng, init_state=None):
             )
 
         def reparam_model_dynamic(param, noise):
-            sampling = param.mu 
-            #sampling += (param.sigma_2 @ noise.mu @ param.sigma_1.T)
+            mu = param.mu
+            sigma_1 = param.sigma_1
+            sigma_2 = param.sigma_2
+            noisy_mu = noise.mu
+            if len(param.mu.shape) == 1:
+                mu = jnp.expand_dims(mu, axis=1)
+                noisy_mu = jnp.expand_dims(noisy_mu, axis=1)
+            sampling = mu + (sigma_2 @ noisy_mu @ sigma_1.T)
+            if len(param.mu.shape) == 1:
+                sampling = jnp.squeeze(sampling, axis=-1)
             return MatrixVariateParameter(
                 mu=sampling,
-                sigma_1=param.sigma_1,
-                sigma_2=param.sigma_2
+                sigma_1=sigma_1,
+                sigma_2=sigma_2
             )
             
         unflattened_keys = unflatten(struct_copy, rkeys)
@@ -165,24 +173,32 @@ def matrixvariate_loss_fn(model, images, labels, samples, rng, init_state=None):
     losses, grads, noise_tree, state = jax.vmap(
         closure, in_axes=(None, 0, None), out_axes=(0, 0, 0, None))(model, samples_rng, init_state)
     def grad_on_mu(grad, param, noise):
-        """ Compute the gradients """
-        mu_grads = grad.mu.mean(axis=0)
-        mu_transpose = jnp.einsum('soi -> sio', grad.mu)
-        noise_transpose = jnp.einsum('sab -> sba', noise.mu)
+        """ Compute the gradients """     
+        mu = grad.mu
+        noise_mu = noise.mu
+        if len(noise.mu.shape) == 2:
+            mu = jnp.expand_dims(mu, axis=-1)
+            noise_mu = jnp.expand_dims(noise_mu, axis=-1)
+        mu_grads = mu.mean(axis=0)
+        mu_transpose = jnp.einsum('soi -> sio', mu)
+        noise_transpose = jnp.einsum('sab -> sba', noise_mu)
         # Compute the gradients for sigma_1 and sigma_2
         mu_sig_2 = jnp.einsum('sio, od -> sid', mu_transpose, param.sigma_2)
-        noise_mu_sig_2 = jnp.einsum('sid, sab -> sib', mu_sig_2, noise.mu)
+        noise_mu_sig_2 = jnp.einsum('sid, sab -> sib', mu_sig_2, noise_mu)
         sigma_1_grads = jnp.mean(noise_mu_sig_2, axis=0)/param.sigma_2.shape[0]
-        mu_sig_1 = jnp.einsum('soi, ib -> sob', grad.mu, param.sigma_1)
+        mu_sig_1 = jnp.einsum('soi, ib -> sob', mu, param.sigma_1)
         noise_mu_sig_1 = jnp.einsum('sob, sba -> soa', mu_sig_1, noise_transpose) 
         sigma_2_grads = jnp.mean(noise_mu_sig_1, axis=0)/param.sigma_1.shape[0]
         # Return the gradients
+        if len(noise.mu.shape) == 2:
+            mu_grads = jnp.squeeze(mu_grads, axis=-1)
         return MatrixVariateParameter(
             mu=mu_grads,
             sigma_1=sigma_1_grads,
             sigma_2=sigma_2_grads
         )
     mean_loss = jnp.mean(losses)
+    jax.debug.print('{x}', x=mean_loss)
     # Adjust the gradients
     grads = map(ft.partial(grad_on_mu), grads, eqx.filter(
         model, eqx.is_array), eqx.filter(noise_tree, eqx.is_array), is_leaf=discriminant)

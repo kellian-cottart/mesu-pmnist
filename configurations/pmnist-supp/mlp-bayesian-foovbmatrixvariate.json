@@ -3,7 +3,8 @@
   "network_params": {
     "layers": [784, 50, 10],
     "activation_fn": "relu",
-    "alpha": 0.5
+    "alpha": 0.5,
+    "use_bias": false
   },
   "optimizer": "foovbmatrixvariate",
   "optimizer_params": {
@@ -12,8 +13,8 @@
     "clamp_grad": 0
   },
   "task": "PermutedMNIST",
-  "n_train_samples": 500,
-  "n_test_samples": 500,
+  "n_train_samples": 50,
+  "n_test_samples": 50,
   "n_tasks": 10,
   "epochs": 20,
   "train_batch_size": 128,

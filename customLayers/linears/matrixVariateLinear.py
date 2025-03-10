@@ -6,10 +6,7 @@ from equinox import Module, field
 from equinox import _misc
 from .matrixVariateParameter import MatrixVariateParameter
 from jax.random import split, normal, uniform
-from jax.numpy import diag
-
-import jax
-
+from jax.numpy import diag, expand_dims, squeeze
 
 class MatrixVariateLinear(Module, strict=True):
     """Performs a linear transformation."""
@@ -49,7 +46,7 @@ class MatrixVariateLinear(Module, strict=True):
         in_features_ = 1 if in_features == "scalar" else in_features
         out_features_ = 1 if out_features == "scalar" else out_features
         wshape = (out_features_, in_features_)
-        bshape = (out_features_,)
+        bshape = (out_features_,) 
         self.weight = MatrixVariateParameter(
             mu=sqrt(2.0 * alpha / (wshape[1] + 2.0)) * normal(wkey, wshape),
             sigma_1=diag(
@@ -61,7 +58,7 @@ class MatrixVariateLinear(Module, strict=True):
             mu=sqrt(2.0 * alpha / (bshape[0] + 2.0)) *
             normal(bkey, bshape) if use_bias else None,
             sigma_1=diag(sqrt(sqrt(2.0 * (1.0 - alpha) /
-                         (bshape[0] + 2.0))) * ones(bshape[0])) if use_bias else None,
+                         (bshape[0] + 2.0))) * ones(1)) if use_bias else None,
             sigma_2=diag(sqrt(sqrt(2.0 * (1.0 - alpha) /
                          (bshape[0] + 2.0))) * ones(bshape[0])) if use_bias else None,
         )
@@ -80,8 +77,7 @@ class MatrixVariateLinear(Module, strict=True):
         """
         output = dot(x, self.weight.mu.T)
         if self.use_bias:
-            biases = self.bias.mu
-            output += biases
+            output += self.bias.mu
         return output
     
 
@@ -99,7 +95,9 @@ class MatrixVariateLinear(Module, strict=True):
                                     ) @ self.weight.sigma_1.T
         output = dot(x, weights.T)
         if self.use_bias:
-            biases = self.bias.mu + (self.bias.sigma_2 @ normal(wkey, shape(self.bias.mu))
+            biases = expand_dims(self.bias.mu, axis=-1)
+            biases = biases + (self.bias.sigma_2 @ normal(wkey, shape(biases))
                                      ) @ self.bias.sigma_1.T
+            biases = squeeze(biases, axis=-1)
             output += biases
         return output
