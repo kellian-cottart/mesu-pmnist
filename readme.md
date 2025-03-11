@@ -53,6 +53,15 @@ python main.py -it 5 -ood pmnist -wh -c mnist-ood/mlp-bayesian-mesu -fits
 python main.py -it 5 -ood pmnist -wh -c mnist-ood/mlp-bayesian-mesu-high-N -fits
 ```
 
+## Figure supplementary FOOVB-MatrixVariate, FOOVB-Diagonal, and MESU
+
+These are the commands for the supplementary figure. Each command runs for about 2h30 on a RTX 3090.
+
+```bash
+python main.py -it 5 -ood fashion -c pmnist-supp/mlp-bayesian-foovbdiagonal -fits 
+python main.py -it 5 -ood fashion -c pmnist-supp/mlp-bayesian-foovbmatrixvariate -fits
+```
+
 ## Files for figures
 
 Two files are available in the repository:

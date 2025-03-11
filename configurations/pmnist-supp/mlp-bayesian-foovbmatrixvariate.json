@@ -1,18 +1,19 @@
 {
   "network": "matrixvariatemlp",
   "network_params": {
-    "layers": [784, 50, 10],
+    "layers": [784, 100, 100, 10],
     "activation_fn": "relu",
     "alpha": 0.5,
-    "use_bias": false
+    "use_bias": true
   },
   "optimizer": "foovbmatrixvariate",
   "optimizer_params": {
-    "lr_mu": 1,
-    "lr_sigma": 1,
-    "clamp_grad": 0
+    "lr_mu": 1
   },
   "task": "PermutedMNIST",
+  "task_params": {
+    "dataset_normalisation": "standardised"
+  },
   "n_train_samples": 50,
   "n_test_samples": 50,
   "n_tasks": 10,
