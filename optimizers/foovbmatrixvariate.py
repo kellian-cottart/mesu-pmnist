@@ -33,7 +33,7 @@ def solve_matrix_equation(v_mat, e_mat):
     return x_mat
 
 
-def foovbmatrixvariate(lr_mu: float = 1) -> optax.GradientTransformation:
+def foovbmatrixvariate(lr_mu: float = 1, clamp_grad: float = 0) -> optax.GradientTransformation:
     """
     Optax gradient transformation for foovb-matrixvariate.
 
@@ -60,6 +60,12 @@ def foovbmatrixvariate(lr_mu: float = 1) -> optax.GradientTransformation:
             grad_mu = grad.mu
             grad_sigma_1 = grad.sigma_1
             grad_sigma_2 = grad.sigma_2
+            
+            # clamp gradients
+            if clamp_grad > 0:
+                grad_sigma_1 = jnp.clip(grad_sigma_1, -clamp_grad, clamp_grad)
+                grad_sigma_2 = jnp.clip(grad_sigma_2, -clamp_grad, clamp_grad)
+            
             
             if len(grad.mu.shape) == 1:
                 grad_mu = jnp.expand_dims(grad_mu, axis=-1)

@@ -9,6 +9,7 @@ from jax.random import split, uniform
 from torch.utils.data import DataLoader
 import jax.numpy as jnp
 from models import BaseMatrixVariateMLP
+from optax import softmax_cross_entropy
 
 @eqx.filter_jit
 def loss_fn(model, images, labels, samples=None, rng=None, ewc_online_parameters=None, ewc_streaming_parameters=None, ewc_parameters=None, si_parameters=None, init_state=None):
@@ -146,8 +147,8 @@ def matrixvariate_loss_fn(model, images, labels, samples, rng, init_state=None):
                 weights = jnp.squeeze(weights, axis=-1)
             return MatrixVariateParameter(
                 mu=weights,
-                sigma_1=sigma_1,
-                sigma_2=sigma_2
+                sigma_1=jnp.zeros_like(sigma_1),
+                sigma_2=jnp.zeros_like(sigma_2)
             )
         unflattened_keys = unflatten(struct_copy, rkeys)
         # Generate noise for the dynamic part of the model
@@ -159,16 +160,17 @@ def matrixvariate_loss_fn(model, images, labels, samples, rng, init_state=None):
         @eqx.filter_value_and_grad(has_aux=True)
         def loss_fn(param_model, images, labels, init_state):
             # Compute predicti ons using the reparameterized model
-            predictions, state = jax.vmap(ft.partial(param_model, backwards=True), axis_name="batch", in_axes=(
+            logits, state = jax.vmap(ft.partial(param_model, backwards=True), axis_name="batch", in_axes=(
                 0, None, None, None), out_axes=(0, None))(images, init_state, samples, samples_rng)
-            output = jax.nn.log_softmax(predictions, axis=-1) * labels
-            loss = -jnp.sum(output, axis=-1).sum()
+            output = jax.nn.log_softmax(logits, axis=-1) * labels
+            loss = -jnp.sum(output, axis=-1).sum()          
             return loss, state
         # Compute the loss and gradients
         (losses, state), grads = loss_fn(
             reparam_model, images, labels, init_state)
         return losses, grads, noise_tree, state
     # Vectorize the closure function over the samples
+    jax.debug.breakpoint()
     losses, grads, noise_tree, state = jax.vmap(
         closure, in_axes=(None, 0, None), out_axes=(0, 0, 0, None))(model, samples_rng, init_state)
     
@@ -183,9 +185,9 @@ def matrixvariate_loss_fn(model, images, labels, samples, rng, init_state=None):
         mu_grads = mu.mean(axis=0)
         # Compute the gradients for the sigma parameters
         sigma_1_grads = jax.vmap(
-            lambda grad_sample, noise_sample: 1 / (param.sigma_2.shape[0]*samples) * grad_sample.T @ param.sigma_2 @ noise_sample)(mu, noise_mu).mean(axis=0)
+            lambda grad_sample, noise_sample: grad_sample.T @ param.sigma_2 @ noise_sample)(mu, noise_mu).mean(axis=0) / param.sigma_2.shape[0]
         sigma_2_grads = jax.vmap(
-            lambda grad_sample, noise_sample: 1 / (param.sigma_1.shape[0]*samples) * grad_sample @ param.sigma_1 @ noise_sample.T)(mu, noise_mu).mean(axis=0)
+            lambda grad_sample, noise_sample: grad_sample @ param.sigma_1 @ noise_sample.T)(mu, noise_mu).mean(axis=0) / param.sigma_2.shape[0]
         if len(noise.mu.shape) == 2:
             mu_grads = jnp.squeeze(mu_grads, axis=-1)
         return MatrixVariateParameter(
@@ -194,6 +196,7 @@ def matrixvariate_loss_fn(model, images, labels, samples, rng, init_state=None):
             sigma_2=sigma_2_grads
         )
     mean_loss = jnp.mean(losses)
+    jax.debug.print("{x}", x=mean_loss)
     # Adjust the gradients
     grads = map(grad_on_mu, grads, model, noise_tree, is_leaf=discriminant)
     return (mean_loss, state), grads

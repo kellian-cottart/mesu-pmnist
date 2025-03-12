@@ -5,6 +5,8 @@ from jax.nn import relu
 from jax.numpy import ravel
 from jax import vmap
 from equinox.nn import LayerNorm, BatchNorm
+import jax
+
 class BaseMatrixVariateMLP(Module):
     layers: list[MatrixVariateLinear]
 
