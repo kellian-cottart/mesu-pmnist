@@ -29,7 +29,7 @@ The main file is `main.py`. It is used to run the experiments according to the c
 
 ### Figure PMNIST
 
-These are the commands for Fig. 3. Each command runs for about 50 minutes on a RTX 3090.
+These are the commands for Fig. 3. Each command runs for about 50 minutes for non-Bayesian neural networks and 2h30 for Bayesian networks on a RTX 3090.
 
 ```bash
 python main.py -it 5 -ood fashion -c pmnist/mlp-sgd -fits
@@ -38,7 +38,6 @@ python main.py -it 5 -ood fashion -c pmnist/mlp-stream-ewc-sgd -fits
 python main.py -it 5 -ood fashion -c pmnist/mlp-bayesian-mesu -fits
 python main.py -it 5 -ood fashion -c pmnist/mlp-bayesian-foovbdiagonal -fits
 python main.py -it 5 -ood fashion -c pmnist/mlp-si-sgd -fits
-
 ```
 
 ### Figure MNIST OOD
@@ -51,15 +50,6 @@ python main.py -it 5 -ood pmnist -wh -c mnist-ood/mlp-stream-ewc-sgd -fits
 python main.py -it 5 -ood pmnist -wh -c mnist-ood/mlp-bayesian-foovbdiagonal -fits
 python main.py -it 5 -ood pmnist -wh -c mnist-ood/mlp-bayesian-mesu -fits
 python main.py -it 5 -ood pmnist -wh -c mnist-ood/mlp-bayesian-mesu-high-N -fits
-```
-
-## Figure supplementary FOOVB-MatrixVariate, FOOVB-Diagonal, and MESU
-
-These are the commands for the supplementary figure. Each command runs for about 2h30 on a RTX 3090.
-
-```bash
-python main.py -it 5 -ood fashion -c pmnist-supp/mlp-bayesian-foovbdiagonal -fits 
-python main.py -it 5 -ood fashion -c pmnist-supp/mlp-bayesian-foovbmatrixvariate -fits
 ```
 
 ## Files for figures
