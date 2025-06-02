@@ -1,8 +1,9 @@
 import jax
 from jax.numpy import expand_dims, ndarray, array
 import equinox as eqx
-import functools as ft
+from functools import partial
 from jax.tree import map
+from utils.uncertaintyFunctions import compute_uncertainty
 
 
 def main_test_fn(test_dataset, num_classes, test_samples, test_ck, model, model_state, norm_params, is_permuted=False, max_permutations=None, permutations=None, fits_in_memory=False):
@@ -10,7 +11,7 @@ def main_test_fn(test_dataset, num_classes, test_samples, test_ck, model, model_
         # Specific test function only for permuted mnist to increase speed.
         # Instead of testing each permutation separately as if they were distinct tasks, we permute at the batch level to increase speed.
         images, labels = test_dataset[0]
-        accuracies, predictions = test_fn_permuted_mnist(
+        accuracies, aleatoric_u, epistemic_u = test_fn_permuted_mnist(
             model=model,
             images=images,
             labels=labels,
@@ -23,7 +24,8 @@ def main_test_fn(test_dataset, num_classes, test_samples, test_ck, model, model_
         )
     elif fits_in_memory == True:
         accuracies = []
-        predictions = []
+        aleatoric_u = []
+        epistemic_u = []
         for task_id, task_dataset in enumerate(test_dataset):
             if norm_params is not None:
                 model = model.load_tree_norm(
@@ -36,10 +38,14 @@ def main_test_fn(test_dataset, num_classes, test_samples, test_ck, model, model_
                                        rng=test_ck,
                                        state=model_state,
                                        test_samples=test_samples)
+
+            aleatoric, epistemic = compute_uncertainty(pred)
             accuracies.append(acc)
-            predictions.append(pred)
+            aleatoric_u.append(aleatoric)
+            epistemic_u.append(epistemic)
         accuracies = array(accuracies)
-        predictions = array(predictions)
+        aleatoric_u = array(aleatoric_u)
+        epistemic_u = array(epistemic_u)
     else:
         accuracies = []
         predictions = []
@@ -66,7 +72,7 @@ def main_test_fn(test_dataset, num_classes, test_samples, test_ck, model, model_
         predictions = array(predictions)
         predictions = predictions.reshape(
             predictions.shape[0], predictions.shape[1]*predictions.shape[2], *predictions.shape[3:])
-    return accuracies, predictions
+    return accuracies, aleatoric_u, epistemic_u
 
 
 def test_fn_bayesian(model, images, state, samples, rng):
@@ -79,7 +85,7 @@ def test_fn_deterministic(model, images, state):
     return jax.vmap(model, axis_name="batch", in_axes=(0, None), out_axes=(0, None))(images, state)
 
 
-@ eqx.filter_jit
+@eqx.filter_jit
 def compute_accuracy(model, images, labels, state, samples=None, rng=None):
     # images.shape = (batch, height, width)
     if samples is not None:
@@ -88,10 +94,11 @@ def compute_accuracy(model, images, labels, state, samples=None, rng=None):
     else:
         predictions, _ = test_fn_deterministic(model, images, state)
         output = jax.nn.log_softmax(predictions, axis=-1)
-    return (output.argmax(axis=-1) == labels.argmax(axis=-1)).mean(), predictions
+    accuracy = (output.argmax(axis=-1) == labels.argmax(axis=-1)).mean()
+    return accuracy, predictions
 
 
-@ eqx.filter_jit
+@eqx.filter_jit
 def test_fn_memory(model: eqx.Module,
                    images: ndarray,
                    labels: ndarray,
@@ -100,14 +107,14 @@ def test_fn_memory(model: eqx.Module,
                    test_samples=None,):
     def compute_accuracies_predictions(images, labels, test_samples, model, state, rng):
         # First, we do a scan on the number of batches
-        def scan_f(carry, data, model):
+        def scan_f(carry, data):
             image, label = data
             accuracy, predictions = compute_accuracy(
                 model, image, label, state, test_samples, rng)
             return carry, (accuracy, predictions)
 
         _, (accuracies, predictions) = jax.lax.scan(
-            f=ft.partial(scan_f, model=model),
+            f=scan_f,
             init=(),
             xs=(images, labels))
         return accuracies, predictions
@@ -120,7 +127,7 @@ def test_fn_memory(model: eqx.Module,
     return accuracies, predictions
 
 
-@ eqx.filter_jit
+@eqx.filter_jit
 def test_fn_permuted_mnist(model: eqx.Module,
                            images: ndarray,
                            labels: ndarray,
@@ -130,58 +137,69 @@ def test_fn_permuted_mnist(model: eqx.Module,
                            permutations=None,
                            test_samples=None,
                            norm_params=None):
-    """ Complicated function here. Basically, we're defining batches over permutations of MNIST
-    to increase the speed of testing of the different permutations which is the true bottleneck
-    when willing to test on a large number of permutations. Then, we scan on the perm batches
-
     """
-
-    def compute_accuracies_predictions(images, labels, test_samples, model, state, rng, norm_params):
-        def scan_f(carry, data, norm_param, model):
-            image, label = data
-            if norm_param is not None:
-                model = model.load_tree_norm(norm_param)
-            accuracy, predictions = compute_accuracy(
-                model, image, label, state, test_samples, rng)
-            return carry, (accuracy, predictions)
-
-        _, (accuracies, predictions) = jax.lax.scan(
-            f=ft.partial(scan_f, norm_param=norm_params, model=model),
-            init=(),
-            xs=(images, labels))
-        return accuracies, predictions
-
+    Test function for permuted MNIST to increase speed by batching over permutations.
+    Instead of testing each permutation separately, this function permutes at the batch level.
+    """
+    # If the number of parallel permutations is less than the total permutations, batch them
     if max_parallel_permutation < permutations.shape[0]:
-        batched_permutations = permutations.reshape(
-            max_parallel_permutation, permutations.shape[0] // max_parallel_permutation, *permutations.shape[1:])
-
-        def reshape(x):
-            return x.reshape(
-                max_parallel_permutation, x.shape[0] // max_parallel_permutation, *x.shape[1:])
-        norm_params = map(reshape, norm_params)
+        # Reshape permutations into batches
+        batched_permutations = permutations.reshape(permutations.shape[0] // max_parallel_permutation,
+                                                    max_parallel_permutation, *permutations.shape[1:])
+        if norm_params is not None:
+            # Helper function to reshape norm_params if provided
+            def reshape(x):
+                return x.reshape(
+                    x.shape[0] // max_parallel_permutation, max_parallel_permutation, *x.shape[1:])
+            norm_params = map(reshape, norm_params)
     else:
+        # If all permutations fit in one batch, expand dimensions
         batched_permutations = expand_dims(permutations, 0)
-        norm_params = map(lambda x: expand_dims(x, 0), norm_params)
+        if norm_params is not None:
+            norm_params = map(lambda x: expand_dims(x, 0), norm_params)
 
-    def vmap_permutation(images, labels, test_samples, model, permutations, norm_params_batched):
+    def distribute_batches_permutations(carry, data, model):
+        """
+        Vmappings over permutations and computes accuracy for each batch of permutations.
+        """
+        (batched_permutations, batch_norm_param) = data
 
-        def scan_f_permutation(carry, data):
-            permutation, norm_params_batch = data
+        def vmap_perms(permutation, batch_norm_p, model):
+            # Permute images based on the current permutation
+            def distribute_batches(carry, data, model):
+                """
+                Computes accuracy by vmapping over different permutations.
+                """
+                (image, label) = data
+                accuracy, predictions = compute_accuracy(
+                    model, image, label, state, test_samples, rng)
+                # Compute aleatoric and epistemic uncertainty
+                aleatoric_u, epistemic_u = compute_uncertainty(predictions)
+                return carry, (accuracy, aleatoric_u, epistemic_u)
             permuted_images = images.reshape(
                 images.shape[0], images.shape[1], -1)[:, :, permutation].reshape(images.shape)
-            accuracies, predictions = compute_accuracies_predictions(
-                permuted_images, labels, test_samples, model, state, rng, norm_params_batch)
-            return carry, (accuracies, predictions)
+            if batch_norm_p is not None:
+                model = model.load_tree_norm(batch_norm_p)
+            # Scan over the batch of permuted images and labels
+            _, (accuracy,  aleatoric_u, epistemic_u) = jax.lax.scan(
+                f=partial(distribute_batches, model=model),
+                init=(),
+                xs=(permuted_images, labels))
 
-        _, (accuracies, predictions) = jax.lax.scan(
-            f=scan_f_permutation,
-            init=(),
-            xs=(permutations, norm_params_batched))
-        return accuracies, predictions
-    accuracies, predictions = jax.vmap(vmap_permutation, in_axes=(
-        None, None, None, None, 0, None if norm_params is None else 0))(images, labels, test_samples, model, batched_permutations, norm_params)
+            return accuracy,  aleatoric_u, epistemic_u
+        # Vmap over all permutations in the batch
+        return carry, jax.vmap(vmap_perms, in_axes=(0, 0 if batch_norm_param is not None else None, None))(batched_permutations, batch_norm_param, model)
+    # Scan over all batches of permutations
+    _, (accuracies,  aleatoric_u, epistemic_u) = jax.lax.scan(
+        f=partial(distribute_batches_permutations, model=model),
+        init=(),
+        xs=(batched_permutations, norm_params)
+    )
+    # Reshape and compute mean accuracies
     accuracies = accuracies.reshape(
         accuracies.shape[0] * accuracies.shape[1], *accuracies.shape[2:]).mean(axis=1)
-    predictions = predictions.reshape(
-        predictions.shape[0] * predictions.shape[1], predictions.shape[2] * predictions.shape[3], *predictions.shape[4:])
-    return accuracies, predictions
+    aleatoric_u = aleatoric_u.reshape(
+        aleatoric_u.shape[0] * aleatoric_u.shape[1], -1)
+    epistemic_u = epistemic_u.reshape(
+        epistemic_u.shape[0] * epistemic_u.shape[1], -1)
+    return accuracies, aleatoric_u, epistemic_u

@@ -8,8 +8,7 @@ from jax.lax import tanh, log
 from jax.random import split, uniform
 from torch.utils.data import DataLoader
 import jax.numpy as jnp
-from models import BaseMatrixVariateMLP
-from optax import softmax_cross_entropy
+from jax import vmap
 
 
 @eqx.filter_jit
@@ -89,7 +88,7 @@ def ewc_loss_fn(model, images, labels, ewc_parameters, init_state=None):
 def bayesian_loss_fn(model, images, labels, samples, rng, init_state=None):
     """ Loss function for Bayesian models. """
     # Same rng for all images in the batch, but different for each sample
-    predictions, state = jax.vmap(ft.partial(model, backwards=True),
+    predictions, state = jax.vmap(partial(model, backwards=True),
                                   in_axes=(0, None, None, None), out_axes=(0, None))(images, init_state, samples, rng, )
     output = jax.nn.log_softmax(predictions, axis=-1).mean(axis=1) * labels
     loss = -jnp.sum(output, axis=-1).sum()
@@ -222,7 +221,6 @@ def batch_fn(dynamic_state, opt_state, keys, optimizer, images, labels, state, s
             model, images, labels, samples, ewc_streaming_parameters)
     return dynamic_state, opt_state, loss, ewc_streaming_parameters, state, si_parameters
 
-
 def update_ewc_streaming_parameters(model, images, labels, samples, ewc_streaming_parameters):
     # Compute the new gradients for the fisher information matrix
     _, fisher_grads = loss_fn(model, images, labels, samples)
@@ -234,25 +232,25 @@ def update_ewc_streaming_parameters(model, images, labels, samples, ewc_streamin
 
 @eqx.filter_jit
 def compute_fisher(model, dataset):
-    def fisher_batch_fn(images, labels):
+    def fisher_batch_fn(fisher, images, labels):
         # Compute the loss and gradients
         _, grads = loss_fn(model, images, labels)
         # Compute the Fisher information matrix by squaring the gradients
-        return map(lambda x: x ** 2, grads)
+        return map(lambda x, y: x + y**2, fisher, grads)
 
-    def scan_fn(carry, data):
+    def scan_fn(fisher, data):
         images, labels = data
-        # Train the model
-        fisher = fisher_batch_fn(images, labels)
-        # Return Princess Leia
-        return carry, fisher
+        return fisher_batch_fn(fisher, images, labels), data
+
     # Split the dataset into images and labels
     task_train_images, task_train_labels = dataset
     # Compute the new fisher information matrix
-    _, fisher = jax.lax.scan(
+    fisher = map(
+        lambda x: jnp.zeros_like(x), eqx.filter(model, eqx.is_array))
+    fisher, _ = jax.lax.scan(
         f=scan_fn,
-        init=(),
+        init=(fisher),
         xs=(task_train_images, task_train_labels)
     )
     # Compute expectation of the empirical Fisher information matrix
-    return map(lambda x: jnp.mean(x, axis=0), fisher)
+    return map(lambda x: x / task_train_images.shape[0], fisher)

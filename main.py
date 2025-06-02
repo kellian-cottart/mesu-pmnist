@@ -14,10 +14,12 @@ import argparse
 import json
 from copy import deepcopy
 import numpy as np
-from torch import manual_seed, prod, tensor
+from torch import manual_seed
+from time import time
 from tqdm import tqdm
+from torch import randperm, tensor, prod
 
-os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.90"
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.9"
 # argparse allows to load a configuration from a file
 CONFIGURATION_LOADING_FOLDER = "configurations"
 # first argument is name of config file
@@ -35,7 +37,12 @@ parser.add_argument(
 parser.add_argument(
     "-wh", "--weight_histogram", help="Whether to save weight histograms", action="store_true")
 parser.add_argument(
+    "-eln", "--extract_layer_norm", help="Whether to retrieve the output of the layer norm of the model", action="store_true"
+)
+parser.add_argument(
     "-fits", "--fits_in_memory", help="Whether the dataset fits in memory or not", action="store_true")
+parser.add_argument(
+    "-train", "--train_accuracy", help="Whether to display the train accuracy, requires -v verbose", action="store_true")
 args = parser.parse_args()
 CONFIG_FILE = json.load(
     open(os.path.join(CONFIGURATION_LOADING_FOLDER, args.config+".json")))
@@ -46,7 +53,9 @@ N_ITERATIONS = args.n_iterations
 OOD = args.ood
 VERBOSE = args.verbose
 WEIGHT_HIST = args.weight_histogram
+EXTRACT_LAYER_NORM = args.extract_layer_norm
 FITS_IN_MEMORY = args.fits_in_memory
+TRAIN_ACC = args.train_accuracy
 # set the device
 jax.config.update("jax_platform_name", "gpu")
 
@@ -62,6 +71,8 @@ if __name__ == "__main__":
         print(json.dumps(configuration, indent=4))
         print("========================================")
         FOLDER = f"{TIMESTAMP}{configuration['task']}-t={configuration['n_tasks']}-e={configuration['epochs']}-opt={configuration['optimizer']}"
+        if configuration["optimizer"] == "mesu" or configuration["optimizer"] == "bimu":
+            FOLDER += f"-N={int(configuration['optimizer_params']['N'])}-{int(configuration['n_test_samples'])}f-{int(configuration['n_train_samples'])}b"
         ewc_parameters = None
         ewc_streaming_parameters = None
         ewc_online_parameters = None
@@ -69,13 +80,13 @@ if __name__ == "__main__":
         if "stream-ewc" in configuration:
             ewc_streaming_parameters = deepcopy(configuration["stream-ewc"])
             FOLDER += f"-stream-ewc={configuration['stream-ewc']['importance']}"
-        if "online-ewc" in configuration:
+        elif "online-ewc" in configuration:
             ewc_online_parameters = deepcopy(configuration["online-ewc"])
             FOLDER += f"-online-ewc={configuration['online-ewc']['importance']}"
-        if "ewc" in configuration:
+        elif "ewc" in configuration:
             ewc_parameters = deepcopy(configuration["ewc"])
             FOLDER += f"-ewc={configuration['ewc']['importance']}"
-        if "si" in configuration:
+        elif "si" in configuration:
             si_parameters = deepcopy(configuration["si"])
             FOLDER += f"-si={configuration['si']['coefficient']}"
         if "use_bias" in configuration["network_params"]:
@@ -85,7 +96,8 @@ if __name__ == "__main__":
         DATA_PATH = os.path.join(CONFIGURATION_PATH, "accuracy")
         WEIGHTS_PATH = os.path.join(CONFIGURATION_PATH, "weights")
         UNCERTAINTY_PATH = os.path.join(CONFIGURATION_PATH, "uncertainty")
-        for path in [SAVE_PATH, CONFIGURATION_PATH, DATA_PATH, WEIGHTS_PATH, UNCERTAINTY_PATH]:
+        TRAIN_PATH = os.path.join(CONFIGURATION_PATH, "train_accuracy")
+        for path in [SAVE_PATH, CONFIGURATION_PATH, DATA_PATH, WEIGHTS_PATH, UNCERTAINTY_PATH, TRAIN_PATH]:
             os.makedirs(path, exist_ok=True)
         # save config
         with open(CONFIGURATION_PATH + "/config.json", "w") as f:
@@ -94,18 +106,17 @@ if __name__ == "__main__":
             # Initialize the random number generator
             manual_seed(configuration["seed"])
             np.random.seed(configuration["seed"])
-            rng = jax.random.PRNGKey(configuration["seed"])
+            rng = jax.random.key(configuration["seed"])
             # Load the dataset
             loader = GPULoading(device="cpu")
-            dataset_normalisation = configuration[
-                "dataset_normalisation"] if "dataset_normalisation" in configuration else None
+            task_params = configuration["task_params"] if "task_params" in configuration else {
+            }
             max_permutations = configuration["max_parallel_permutation"] if "max_parallel_permutation" in configuration else 1
             train_samples = configuration["n_train_samples"] if "n_train_samples" in configuration else None
             test_samples = configuration["n_test_samples"] if "n_test_samples" in configuration else None
             train, test, shape, num_classes = loader.task_selection(
-                configuration["task"], dataset_normalisation=dataset_normalisation)
+                configuration["task"], **task_params)
             is_permuted = configuration["task"] == "permutedmnist"
-            norm_params = None
             # Permutations
             permutations = None
             if is_permuted:
@@ -114,6 +125,9 @@ if __name__ == "__main__":
                     perm_keys, configuration["n_tasks"])
                 permutations = jnp.array(
                     [jax.random.permutation(key, jnp.array(shape).prod()) for key in perm_keys])
+                # save permutations vector
+                with open(os.path.join(CONFIGURATION_PATH, "permutations.npy"), "wb") as f:
+                    jnp.save(f, permutations)
 
             model_key, rng = jax.random.split(rng)
             # Configure the model
@@ -127,7 +141,6 @@ if __name__ == "__main__":
                 old_param = eqx.filter(model, eqx.is_array)
                 fisher = map(lambda x: jnp.zeros_like(x), old_param)
                 return old_param, fisher
-
             if ewc_parameters is not None:
                 old_param, fisher = initialize_ewc_parameters(model)
                 old_param = map(lambda x: expand_dims(x, 0).repeat(
@@ -135,6 +148,7 @@ if __name__ == "__main__":
                 fisher = map(lambda x: expand_dims(x, 0).repeat(
                     configuration["n_tasks"], axis=0), fisher)
                 ewc_parameters["old_param"], ewc_parameters["fisher"] = old_param, fisher
+
             if ewc_online_parameters is not None:
                 ewc_online_parameters["old_param"], ewc_online_parameters["fisher"] = initialize_ewc_parameters(
                     model)
@@ -151,7 +165,6 @@ if __name__ == "__main__":
             if si_parameters is not None:
                 si_parameters["old_param"], si_parameters["omega"], si_parameters["w_k"] = initialize_si_parameters(
                     model)
-
             # GENERATING A HUGE ARRAY OF KEYS, ASSURING THAT THE KEYS ARE UNIQUE
             trkey, tekey, rng = jax.random.split(rng, 3)
             training_core_keys = jax.random.split(
@@ -169,21 +182,53 @@ if __name__ == "__main__":
                 elif "pmnist" in OOD:
                     _, test_ood, shape_ood, num_classes_ood = loader.task_selection(
                         "mnist")
-                    ood_permutation = randperm(prod(tensor(shape_ood)))
-                    images, labels = test_ood[0][:]
-                    images = images.reshape(
-                        images.shape[0], -1)[:, ood_permutation].reshape(images.shape)
-                    test_ood[0] = TensorDataset(images, labels)
                 ood_dataloader = to_dataloader(
                     test_ood, configuration["test_batch_size"], num_classes, fits_in_memory=FITS_IN_MEMORY)
                 ookey, rng = jax.random.split(rng)
                 ood_core_keys = jax.random.split(
                     ookey, (configuration["n_tasks"], configuration["epochs"]))
-                # Prepare the dataloader
+            # Prepare the dataloader
             train = to_dataloader(
                 train, configuration["train_batch_size"], num_classes, fits_in_memory=FITS_IN_MEMORY)
             test_dataloader = to_dataloader(
                 test, configuration["test_batch_size"], num_classes, fits_in_memory=FITS_IN_MEMORY)
+            # compute for each epoch in each task the time it takes to compute the training and testing
+            train_timing_array = jnp.zeros(
+                (configuration["n_tasks"], configuration["epochs"]))
+            test_timing_array = jnp.zeros(
+                (configuration["n_tasks"], configuration["epochs"]))
+            # Memory occupation metric: compute how much memory is used by the model and the optimizer
+            model_memory = jnp.sum(
+                jnp.array(leaves(map(lambda x: x.nbytes, eqx.filter(model, eqx.is_array)))))
+            opt_memory = jnp.sum(jnp.array(
+                leaves(map(lambda x: x.nbytes, eqx.filter(opt_state, eqx.is_array)))))
+            extra_memory = 0
+            if "si" in configuration:
+                extra_memory = jnp.sum(jnp.array(leaves(
+                    map(lambda x: x.nbytes, eqx.filter(si_parameters["omega"], eqx.is_array)))))
+                extra_memory += jnp.sum(jnp.array(leaves(
+                    map(lambda x: x.nbytes, eqx.filter(si_parameters["w_k"], eqx.is_array)))))
+            elif "stream-ewc" in configuration:
+                extra_memory = jnp.sum(jnp.array(leaves(map(lambda x: x.nbytes, eqx.filter(
+                    ewc_streaming_parameters["old_param"], eqx.is_array)))))
+                extra_memory += jnp.sum(jnp.array(leaves(map(lambda x: x.nbytes, eqx.filter(
+                    ewc_streaming_parameters["fisher"], eqx.is_array)))))
+            elif "online-ewc" in configuration:
+                extra_memory = jnp.sum(jnp.array(leaves(map(lambda x: x.nbytes, eqx.filter(
+                    ewc_online_parameters["old_param"], eqx.is_array)))))
+                extra_memory += jnp.sum(jnp.array(leaves(map(lambda x: x.nbytes,
+                                        eqx.filter(ewc_online_parameters["fisher"], eqx.is_array)))))
+            elif "ewc" in configuration:
+                extra_memory = jnp.sum(jnp.array(leaves(
+                    map(lambda x: x.nbytes, eqx.filter(ewc_parameters["old_param"], eqx.is_array)))))
+                extra_memory += jnp.sum(jnp.array(leaves(
+                    map(lambda x: x.nbytes, eqx.filter(ewc_parameters["fisher"], eqx.is_array)))))
+            # save the memory occupation as the sum of the model, optimizer and extra parameters
+            memory_occupation = jnp.array(
+                model_memory + opt_memory + extra_memory)
+            jnp.save(os.path.join(CONFIGURATION_PATH,
+                     "memory_occupation.npy"), memory_occupation)
+
             for task_id, task in enumerate(pbar):
                 if is_permuted:
                     task_train_dataloader = reshape_perm(
@@ -194,11 +239,17 @@ if __name__ == "__main__":
                     raise ValueError("Length of train and n_tasks do not match: ", len(
                         train), " != ", configuration["n_tasks"])
                 for epoch in epoch_pbar:
+                    if "layerwise" in configuration:
+                        layerwise = configuration["layerwise"]
+                        opt_state["layer_to_train"] = layerwise[str(epoch)] if str(
+                            epoch) in layerwise else opt_state["layer_to_train"]
+
                     if VERBOSE:
                         pbar.set_description(
                             f"Task {task+1}/{configuration['n_tasks']} - Epoch {epoch+1}/{configuration['epochs']}")
                     train_ck = training_core_keys[task_id, epoch]
                     test_ck = test_core_keys[task_id, epoch]
+                    start = time()
                     model, opt_state, losses, ewc_streaming_parameters, model_state, si_parameters = train_fn(
                         model=model,
                         dataset=task_train_dataloader,
@@ -213,20 +264,44 @@ if __name__ == "__main__":
                         si_parameters=si_parameters,
                         init_state=model_state,
                     )
-                    accuracies, predictions = main_test_fn(
+                    train_timing_array = train_timing_array.at[task_id, epoch].set(
+                        time()-start)
+                    start = time()
+                    accuracies, aleatoric_u, epistemic_u = main_test_fn(
                         test_dataset=test_dataloader,
                         num_classes=num_classes,
                         test_samples=test_samples,
                         test_ck=test_ck,
                         model=model,
                         model_state=model_state,
-                        norm_params=norm_params,
+                        norm_params=None,
                         is_permuted=is_permuted,
                         max_permutations=max_permutations,
                         permutations=permutations,
                         fits_in_memory=FITS_IN_MEMORY
                     )
+                    test_timing_array = test_timing_array.at[task_id, epoch].set(
+                        time()-start)
                     if VERBOSE:
+                        if TRAIN_ACC:
+                            tr_accuracies, _, _ = main_test_fn(
+                                test_dataset=train,
+                                num_classes=num_classes,
+                                test_samples=test_samples,
+                                test_ck=test_ck,
+                                model=model,
+                                model_state=model_state,
+                                norm_params=None,
+                                is_permuted=is_permuted,
+                                max_permutations=max_permutations,
+                                permutations=permutations,
+                                fits_in_memory=FITS_IN_MEMORY
+                            )
+                            tqdm.write("======== Train ========")
+                            for i, acc in enumerate(tr_accuracies):
+                                tqdm.write(f"{acc.item()*100:.2f}%", end="\t" if i % 10 !=
+                                           9 and i != len(tr_accuracies) - 1 else "\n")
+                        tqdm.write("======== Test ========")
                         for i, acc in enumerate(accuracies):
                             tqdm.write(f"{acc.item()*100:.2f}%", end="\t" if i % 10 !=
                                        9 and i != len(accuracies) - 1 else "\n")
@@ -235,31 +310,32 @@ if __name__ == "__main__":
                     if WEIGHT_HIST:
                         # save  weights
                         filter_weights = eqx.filter(model, eqx.is_array)
-                        leaves = jax.tree.leaves(filter_weights)
-                        for i, leaf in enumerate(leaves):
+                        output_leaves = leaves(filter_weights)
+                        for i, leaf in enumerate(output_leaves):
                             with open(os.path.join(WEIGHTS_PATH, f"layer={i}-task={task_id}-epoch={epoch}.npy"), "wb") as f:
                                 jnp.save(f, leaf)
-                    aleatoric_u, epistemic_u = compute_uncertainty(
-                        predictions[task_id])
+
                     for metric_name, metric_data in {"aleatoric": aleatoric_u, "epistemic": epistemic_u}.items():
                         np.save(os.path.join(
                                 UNCERTAINTY_PATH, f"{metric_name}-task={task_id}-epoch={epoch}.npy"), metric_data)
                     if OOD is not None:
                         # Compute uncertainty
                         ood_k = ood_core_keys[task_id, epoch]
-                        ood_accuracies, ood_predictions = main_test_fn(
+                        ood_accuracies,  ood_aleatoric_u, ood_epistemic_u = main_test_fn(
                             test_dataset=ood_dataloader,
                             num_classes=num_classes,
                             test_samples=test_samples,
                             test_ck=ood_k,
                             model=model,
                             model_state=model_state,
-                            norm_params=norm_params,
+                            norm_params=None,
                             is_permuted=False,
                             fits_in_memory=FITS_IN_MEMORY
                         )
-                        ood_aleatoric_u, ood_epistemic_u = compute_uncertainty(
-                            ood_predictions[0])
+                        epistemic_u = epistemic_u[task_id]
+                        aleatoric_u = aleatoric_u[task_id]
+                        ood_epistemic_u = ood_epistemic_u[0]
+                        ood_aleatoric_u = ood_aleatoric_u[0]
                         epistemic_roc_auc = compute_roc_auc(
                             epistemic_u, ood_epistemic_u)
                         aleatoric_roc_auc = compute_roc_auc(
@@ -275,6 +351,10 @@ if __name__ == "__main__":
                                 UNCERTAINTY_PATH, f"{metric_name}-task={task}-epoch={epoch}.npy"), metric_data)
                     with open(os.path.join(DATA_PATH, f"task={task}-epoch={epoch}.npy"), "wb") as f:
                         jnp.save(f, accuracies)
+
+                    if TRAIN_ACC:
+                        with open(os.path.join(TRAIN_PATH, f"task={task}-epoch={epoch}.npy"), "wb") as f:
+                            jnp.save(f, tr_accuracies)
                 # ewc requires saving at the end of the task the current model parameters
                 if ewc_parameters is not None or ewc_online_parameters is not None:
                     fisher = compute_fisher(
@@ -303,7 +383,14 @@ if __name__ == "__main__":
                         lambda x: jnp.zeros_like(x), si_parameters["w_k"])
                     si_parameters["old_param"] = eqx.filter(
                         model, eqx.is_array)
-
+            # save the timing
+            np.save(os.path.join(CONFIGURATION_PATH, "train_timing.npy"),
+                    train_timing_array)
+            np.save(os.path.join(CONFIGURATION_PATH, "test_timing.npy"),
+                    test_timing_array)
+            # serialize the model
+            eqx.tree_serialise_leaves(os.path.join(
+                CONFIGURATION_PATH, "model"), model)
         except (KeyboardInterrupt, SystemExit, Exception):
             print(traceback.format_exc())
             rmtree(SAVE_PATH)
