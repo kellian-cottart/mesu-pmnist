@@ -52,6 +52,19 @@ python main.py -it 5 -ood pmnist -wh -c mnist-ood/mlp-bayesian-mesu -fits
 python main.py -it 5 -ood pmnist -wh -c mnist-ood/mlp-bayesian-mesu-high-N -fits
 ```
 
+### Figure Supplementary N Study
+
+```bash
+python main.py -it 5 -ood fashion -c supp-n-study/mlp-bayesian-mesu-N=120000 -fits
+python main.py -it 5 -ood fashion -c supp-n-study/mlp-bayesian-mesu-N=180000 -fits
+python main.py -it 5 -ood fashion -c supp-n-study/mlp-bayesian-mesu-N=240000 -fits
+python main.py -it 5 -ood fashion -c supp-n-study/mlp-bayesian-mesu-N=300000 -fits
+python main.py -it 5 -ood fashion -c supp-n-study/mlp-bayesian-mesu-N=600000 -fits
+python main.py -it 5 -ood fashion -c supp-n-study/mlp-bayesian-mesu-N=1200000 -fits
+python main.py -it 5 -ood fashion -c supp-n-study/mlp-bayesian-mesu-N=2400000 -fits
+python main.py -it 5 -ood fashion -c supp-n-study/mlp-bayesian-mesu-N=1e15 -fits
+```
+
 ## Files for figures
 
 Two files are available in the repository:
