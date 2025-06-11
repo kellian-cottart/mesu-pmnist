@@ -4,7 +4,7 @@ import equinox as eqx
 from functools import partial
 from jax.tree import map
 from utils.uncertaintyFunctions import compute_uncertainty
-
+from models import *
 
 def main_test_fn(test_dataset, num_classes, test_samples, test_ck, model, model_state, norm_params, is_permuted=False, max_permutations=None, permutations=None, fits_in_memory=False):
     if is_permuted == True:
@@ -84,6 +84,9 @@ def test_fn_deterministic(model, images, state):
     # model = eqx.nn.inference_mode(model)
     return jax.vmap(model, axis_name="batch", in_axes=(0, None), out_axes=(0, None))(images, state)
 
+def test_fn_presynaptic(model, images, state, rng):
+    return jax.vmap(model, axis_name="batch", in_axes=(0, None, None), out_axes=(0, None))(images, state, rng)
+    return jax.vmap(model, axis_name="batch", in_axes=(0, None, None), out_axes=(0, None))(images, state, rng)
 
 @eqx.filter_jit
 def compute_accuracy(model, images, labels, state, samples=None, rng=None):
@@ -91,6 +94,9 @@ def compute_accuracy(model, images, labels, state, samples=None, rng=None):
     if samples is not None:
         predictions, _ = test_fn_bayesian(model, images, state, samples, rng)
         output = jax.nn.log_softmax(predictions, axis=-1).mean(axis=1)
+    elif isinstance(model, BasePresynapticMLP):
+        predictions, _ = test_fn_presynaptic(model, images, state, rng)
+        output = jax.nn.log_softmax(predictions, axis=-1)
     else:
         predictions, _ = test_fn_deterministic(model, images, state)
         output = jax.nn.log_softmax(predictions, axis=-1)

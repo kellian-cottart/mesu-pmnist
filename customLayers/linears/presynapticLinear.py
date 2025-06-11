@@ -1,12 +1,13 @@
-from jax.numpy import shape, dot, ones
+from jax.numpy import shape, dot, ones, expand_dims
 from typing import Literal, Union
 from jaxtyping import PRNGKeyArray, Array
 from math import sqrt
 from equinox import Module, field
 from equinox import _misc
 from .presynapticParameter import PresynapticParameter
-from jax.random import split, normal, uniform
-
+from jax.random import split, normal, uniform, bernoulli
+from jax import custom_vjp
+import jax
 
 class PresynapticLinear(Module, strict=True):
     """Performs a linear transformation."""
@@ -44,35 +45,61 @@ class PresynapticLinear(Module, strict=True):
         wkey, bkey = split(key, 2)
         in_features_ = 1 if in_features == "scalar" else in_features
         out_features_ = 1 if out_features == "scalar" else out_features
-        lim = 1 / sqrt(in_features_)
+        lim = 1 / (sqrt(in_features_) * sqrt(6))
         wshape = (out_features_, in_features_)
         bshape = (out_features_,)
         self.weight = PresynapticParameter(
-            presynaptic=uniform(wkey, wshape, minval=-lim, maxval=lim),
+            probability=0.5 * ones(wshape, dtype=dtype),
             strength=uniform(wkey, wshape, minval=-lim, maxval=lim),
         )
         self.bias = PresynapticParameter(
-            presynaptic=uniform(bkey, bshape, minval=-lim,
-                       maxval=lim) if use_bias else None,
-            strength=uniform(bkey, bshape, minval=-lim,
-                       maxval=lim) if use_bias else None,
+            probability=0.5 * ones(bshape, dtype=dtype) if use_bias else None,
+            strength=uniform(bkey, bshape, minval=-lim, maxval=lim) if use_bias else None,
         )
         self.in_features = in_features
         self.out_features = out_features
         self.use_bias = use_bias
 
-    def __call__(self, x: Array) -> Array:
-        """ Call function for bayesian linear layer
-        `samples` forward passes using weights reparametrization w = mu + sigma * epsilon, epsilon ~ N(0, 1)
-
-        Args:
-            x: input tensor
-            samples: number of samples
-            rng: random key
-        """
-        weights = self.weight.presynaptic * self.weight.strength 
-        output = dot(weights, x)
+    def __call__(self, x: Array, *, key: PRNGKeyArray = None) -> Array:
+        subkey, key = split(key, 2)
+        output = dot_presynaptic(x, self.weight.probability, self.weight.strength, subkey)
         if self.use_bias:
-            biases = self.bias.presynaptic * self.bias.strength
+            biases = self.bias.probability * self.bias.strength
             output = output + biases
         return output
+
+@custom_vjp
+def dot_presynaptic(x, probability, strength, key):
+    """Presynaptic dot product surrogate function
+    Args:
+        x: Input tensor of shape (batch_size, in_features)
+        probability: Presynaptic probabilities of shape (out_features, in_features) 
+        strength: Strength of the synapses of shape (out_features, in_features)
+        key: JAX PRNG key for randomness
+    Returns:
+        Output tensor of shape (batch_size, out_features)
+    """
+    stochastic_release = bernoulli(key, p=probability)
+    weight = stochastic_release * strength
+    return dot(x, weight.T)
+
+def dot_presynaptic_fwd(x, probability, strength, key):
+    """ Forward pass surrogate of the dot_presynaptic function
+    """
+    output = dot_presynaptic(x, probability, strength, key)
+    return output, (x, probability, strength, key)
+
+def dot_presynaptic_bwd(res, grad_output):
+    """ Backward pass surrogate of the dot_presynaptic function
+    """
+    x, probability, strength, key = res
+    stochastic_release = bernoulli(key, p=probability)
+    weight = stochastic_release * strength 
+    return (
+        dot(grad_output, weight),  # Gradient w.r.t. tensor_input
+        expand_dims(grad_output, 1) @ expand_dims(x, 0),  # Gradient w.r.t. presynaptic
+        expand_dims(grad_output, 1) @ expand_dims(x, 0)*probability,  # Gradient w.r.t. strength
+        None  # No gradient w.r.t. key
+    )
+# Register the custom forward and backward functions
+dot_presynaptic.defvjp(dot_presynaptic_fwd, dot_presynaptic_bwd)

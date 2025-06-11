@@ -9,7 +9,7 @@ from jax.random import split, uniform
 from torch.utils.data import DataLoader
 import jax.numpy as jnp
 from jax import vmap
-
+from models import *
 
 @eqx.filter_jit
 def loss_fn(model, images, labels, samples=None, rng=None, ewc_online_parameters=None, ewc_streaming_parameters=None, ewc_parameters=None, si_parameters=None, init_state=None):
@@ -29,6 +29,9 @@ def loss_fn(model, images, labels, samples=None, rng=None, ewc_online_parameters
     if samples is not None:
         loss_fn_to_use = bayesian_loss_fn
         loss_args = (model, images, labels, samples, rng, init_state)
+    elif isinstance(model, BasePresynapticMLP):
+        loss_fn_to_use = presynaptic_loss_fn
+        loss_args = (model, images, labels, rng, init_state)
     elif any(param is not None for param in [ewc_online_parameters, ewc_streaming_parameters, ewc_parameters]):
         loss_fn_to_use = ewc_loss_fn
         ewc_params = ewc_online_parameters or ewc_streaming_parameters or ewc_parameters
@@ -83,6 +86,16 @@ def ewc_loss_fn(model, images, labels, ewc_parameters, init_state=None):
     ewc_loss = -jnp.sum(output, axis=-1).sum() + importance / 2 * sum_params
     return ewc_loss, state
 
+
+@eqx.filter_value_and_grad(has_aux=True)
+def presynaptic_loss_fn(model, images, labels, rng, init_state=None):
+    """ Loss function for Bayesian models. """
+    # Same rng for all images in the batch, but different for each sample
+    predictions, state = jax.vmap(partial(model, backwards=True),
+                                  in_axes=(0, None, None), out_axes=(0, None))(images, init_state, rng, )
+    output = jax.nn.log_softmax(predictions, axis=-1) * labels
+    loss = -jnp.sum(output, axis=-1).sum()
+    return loss, state
 
 @eqx.filter_value_and_grad(has_aux=True)
 def bayesian_loss_fn(model, images, labels, samples, rng, init_state=None):

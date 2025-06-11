@@ -13,6 +13,7 @@ def configure_networks(configuration, rng):
         "mlp": BaseMLP,
         "mlpbatchnorm": MLPBatchNorm,
         "mlplayernorm": MLPLayerNorm,
+        "presynapticmlp": BasePresynapticMLP,
     }
     if not "network_params" in configuration:
         raise ValueError("Network parameters 'network_params' not found")
@@ -51,6 +52,7 @@ def configure_optimizer(configuration, model):
         "adam": optax.adam,
         "mesu": mesu,
         "foovbdiagonal": foovbdiagonal,
+        "presynaptic": presynaptic,
     }
     if not "optimizer_params" in configuration:
         raise ValueError("Optimizer parameters not found")
