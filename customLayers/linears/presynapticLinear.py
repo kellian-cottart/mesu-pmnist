@@ -1,3 +1,7 @@
+"""
+Presynaptic linear layer with stochastic synaptic release.
+@author: Kellian Cottart
+"""
 from jax.numpy import shape, dot, ones, expand_dims
 from typing import Literal, Union
 from jaxtyping import PRNGKeyArray, Array

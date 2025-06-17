@@ -1,3 +1,7 @@
+"""
+Custom parameter for presynaptic neurons, including synaptic release probability and strength.
+@author: Kellian Cottart
+"""
 from jaxtyping import Array
 from equinox import Module
 

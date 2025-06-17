@@ -1,3 +1,7 @@
+"""
+Algorithm: Presynaptic stochasticity
+@author: Kellian Cottart
+"""
 import optax
 from jax.numpy import where, clip, ones
 from jax.tree import map

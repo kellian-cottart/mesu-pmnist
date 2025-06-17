@@ -1,3 +1,7 @@
+"""
+Collection of data functions for JAX and PyTorch integration of datasets. Creates new loaders and prepares the data for training and testing.
+@author: Kellian Cottart
+"""
 import jax.numpy as jnp
 import jax
 from torch.utils.data import TensorDataset, DataLoader, default_collate

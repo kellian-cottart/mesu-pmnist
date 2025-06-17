@@ -1,3 +1,7 @@
+"""
+Associates keys from configuration files to the corresponding models and optimizers.
+@author: Kellian Cottart
+"""
 import jax
 from models import *
 from optimizers import *

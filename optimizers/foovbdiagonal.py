@@ -1,3 +1,8 @@
+"""
+Algorithm: FOO-VB Diagonal
+@author: Kellian Cottart
+"""
+
 import optax
 import jax.numpy as jnp
 import jax

@@ -1,3 +1,7 @@
+"""
+Classes and functions loading all different datasets.
+@author: Kellian Cottart
+"""
 import jax
 from jax.numpy import expand_dims, ndarray, array
 import equinox as eqx

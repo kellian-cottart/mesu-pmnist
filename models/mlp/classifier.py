@@ -1,4 +1,7 @@
-# Define a simple model using Equinox
+"""
+Multi-Layer Perceptron (MLP) Classifier with optional normalization layers.
+@author: Kellian Cottart
+"""
 from equinox.nn import Linear, LayerNorm, BatchNorm
 from equinox import Module
 from jax.random import split

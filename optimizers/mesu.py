@@ -1,3 +1,8 @@
+"""
+Algorithm: MESU
+@author: Kellian Cottart
+"""
+
 import optax
 from jax.numpy import where, clip
 from jax.tree import map

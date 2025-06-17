@@ -19,7 +19,7 @@ from time import time
 from tqdm import tqdm
 from torch import randperm, tensor, prod
 
-os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.8"
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.9"
 # argparse allows to load a configuration from a file
 CONFIGURATION_LOADING_FOLDER = "configurations"
 # first argument is name of config file

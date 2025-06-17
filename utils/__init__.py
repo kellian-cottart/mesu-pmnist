@@ -1,3 +1,7 @@
+"""
+@author: Kellian Cottart
+"""
+
 from .testFunctions import *
 from .trainFunctions import *
 from .setupFunctions import *

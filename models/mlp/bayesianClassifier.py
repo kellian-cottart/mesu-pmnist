@@ -1,3 +1,8 @@
+"""
+Bayesian Multi-Layer Perceptron (MLP) Classifier with Layer Normalization.
+@author: Kellian Cottart
+"""
+
 from customLayers import BayesianLinear
 from equinox import Module
 from jax.random import split

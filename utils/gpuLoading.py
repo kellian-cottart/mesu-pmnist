@@ -1,3 +1,7 @@
+"""
+Classes and functions loading all different datasets.
+@author: Kellian Cottart
+"""
 import numpy as np
 import idx2numpy
 from torchvision.transforms import v2

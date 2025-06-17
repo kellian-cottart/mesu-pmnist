@@ -1,3 +1,7 @@
+"""
+Presynaptic Stochasticity classifier
+@author: Kellian Cottart
+"""
 from customLayers import PresynapticLinear
 from equinox import Module
 from jax.random import split

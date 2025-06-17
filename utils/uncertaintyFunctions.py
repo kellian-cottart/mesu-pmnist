@@ -1,3 +1,7 @@
+"""
+Functions used to train the model on the task, and compute the loss w.r.t the algorithm.
+@author: Kellian Cottart
+"""
 import equinox as eqx
 import jax
 import jax.numpy as jnp

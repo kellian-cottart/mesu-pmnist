@@ -1,3 +1,7 @@
+"""
+Algorithm: Stochastic Gradient Descent (SGD)
+@author: Kellian Cottart
+"""
 import jax
 import optax
 from jax.tree import map

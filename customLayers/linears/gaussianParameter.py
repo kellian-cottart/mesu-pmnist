@@ -1,3 +1,7 @@
+"""
+Custom parameter for both mean and variance of a Gaussian distribution.
+@author: Kellian Cottart
+"""
 from jaxtyping import Array
 from equinox import Module
 

@@ -1,3 +1,7 @@
+"""
+Linear layer with Bayesian weights and bias.
+@author: Kellian Cottart
+"""
 from jax.numpy import shape, dot, ones
 from typing import Literal, Union
 from jaxtyping import PRNGKeyArray, Array
