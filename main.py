@@ -19,7 +19,7 @@ from time import time
 from tqdm import tqdm
 from torch import randperm, tensor, prod
 
-os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.9"
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.8"
 # argparse allows to load a configuration from a file
 CONFIGURATION_LOADING_FOLDER = "configurations"
 # first argument is name of config file
@@ -282,29 +282,31 @@ if __name__ == "__main__":
                     )
                     test_timing_array = test_timing_array.at[task_id, epoch].set(
                         time()-start)
+                    if TRAIN_ACC:
+                        tr_accuracies, _, _ = main_test_fn(
+                            test_dataset=train,
+                            num_classes=num_classes,
+                            test_samples=test_samples,
+                            test_ck=test_ck,
+                            model=model,
+                            model_state=model_state,
+                            norm_params=None,
+                            is_permuted=is_permuted,
+                            max_permutations=max_permutations,
+                            permutations=permutations,
+                            fits_in_memory=FITS_IN_MEMORY
+                        )
+                    
                     if VERBOSE:
-                        if TRAIN_ACC:
-                            tr_accuracies, _, _ = main_test_fn(
-                                test_dataset=train,
-                                num_classes=num_classes,
-                                test_samples=test_samples,
-                                test_ck=test_ck,
-                                model=model,
-                                model_state=model_state,
-                                norm_params=None,
-                                is_permuted=is_permuted,
-                                max_permutations=max_permutations,
-                                permutations=permutations,
-                                fits_in_memory=FITS_IN_MEMORY
-                            )
-                            tqdm.write("======== Train ========")
-                            for i, acc in enumerate(tr_accuracies):
-                                tqdm.write(f"{acc.item()*100:.2f}%", end="\t" if i % 10 !=
-                                           9 and i != len(tr_accuracies) - 1 else "\n")
                         tqdm.write("======== Test ========")
                         for i, acc in enumerate(accuracies):
                             tqdm.write(f"{acc.item()*100:.2f}%", end="\t" if i % 10 !=
                                        9 and i != len(accuracies) - 1 else "\n")
+                        if TRAIN_ACC:
+                            tqdm.write("======== Train ========")
+                            for i, acc in enumerate(tr_accuracies):
+                                tqdm.write(f"{acc.item()*100:.2f}%", end="\t" if i % 10 !=
+                                            9 and i != len(tr_accuracies) - 1 else "\n")
                         # add loss to the bar
                         tqdm.write(f"Loss: {jnp.mean(losses):.4f}")
                     if WEIGHT_HIST:
