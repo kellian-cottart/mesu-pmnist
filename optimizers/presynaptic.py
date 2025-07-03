@@ -1,6 +1,18 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# SPDX-License-Identifier: CC-BY-4.0
+#
+# Code for "Bayesian continual learning and forgetting in neural networks"
+# Djohan Bonnet, Kellian Cottart, Tifenn Hirtzlin, Tarcisius Januel, Thomas Dalgaty, Elisa Vianello, Damien Querlioz
+# arXiv: 2504.13569
+# Portions of the code are adapted from the Pytorch project (BDS-3-Clause)
+#
+# Author: Kellian Cottart <kellian.cottart@gmail.com>
+# Date: 2025-07-03
 """
 Algorithm: Presynaptic stochasticity
-@author: Kellian Cottart
+Simon Schug, Frederik Benzing, Angelika Steger (2021) Presynaptic stochasticity improves energy efficiency and helps alleviate the stability-plasticity dilemma eLife 10:e69884
+10.7554/eLife.69884
 """
 import optax
 from jax.numpy import where, clip, ones

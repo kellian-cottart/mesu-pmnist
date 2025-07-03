@@ -1,4 +1,4 @@
-# Metaplasticity for Synaptic Uncertainty (MESU) - MNIST/PermutedMNIST Experiments
+# Bayesian continual learning and forgetting in neural networks - MNIST/PermutedMNIST Experiments
 
 ## Description
 
@@ -13,9 +13,7 @@ conda env create -f environment.yml
 conda activate bayesian
 ```
 
-## Commands to reproduce results
-
-## Shell for main file
+## Main figures
 
 The main file is `main.py`. It is used to run the experiments according to the configuration file. The configuration file is a JSON file that contains the parameters for the experiment. Namely, the network architecture, the hyperparameters, the dataset, the optimizer. Here are the different arguments that can be passed to the main file:
 
@@ -52,20 +50,50 @@ python main.py -it 5 -ood pmnist -wh -c mnist-ood/mlp-bayesian-mesu -fits
 python main.py -it 5 -ood pmnist -wh -c mnist-ood/mlp-bayesian-mesu-high-N -fits
 ```
 
-### Figure Supplementary N Study
+## Supplementary figures
+
+### Figure PMNIST - Study of hyperparameter N
 
 ```bash
-python main.py -it 5 -ood fashion -c supp-n-study/mlp-bayesian-mesu-N=120000 -fits
-python main.py -it 5 -ood fashion -c supp-n-study/mlp-bayesian-mesu-N=180000 -fits
-python main.py -it 5 -ood fashion -c supp-n-study/mlp-bayesian-mesu-N=240000 -fits
-python main.py -it 5 -ood fashion -c supp-n-study/mlp-bayesian-mesu-N=300000 -fits
-python main.py -it 5 -ood fashion -c supp-n-study/mlp-bayesian-mesu-N=600000 -fits
-python main.py -it 5 -ood fashion -c supp-n-study/mlp-bayesian-mesu-N=1200000 -fits
-python main.py -it 5 -ood fashion -c supp-n-study/mlp-bayesian-mesu-N=2400000 -fits
-python main.py -it 5 -ood fashion -c supp-n-study/mlp-bayesian-mesu-N=1e15 -fits
+python main.py -it 5 -ood fashion -wh -c supp-n-study/mlp-bayesian-mesu-N=180000 -fits
+python main.py -it 5 -ood fashion -wh -c supp-n-study/mlp-bayesian-mesu-N=300000 -fits
+python main.py -it 5 -ood fashion -wh -c supp-n-study/mlp-bayesian-mesu-N=600000 -fits
+python main.py -it 5 -ood fashion -wh -c supp-n-study/mlp-bayesian-mesu-N=1200000 -fits
+python main.py -it 5 -ood fashion -wh -c supp-n-study/mlp-bayesian-mesu-N=2400000 -fits
+python main.py -it 5 -ood fashion -wh -c supp-n-study/mlp-bayesian-mesu-N=1e15 -fits
+python main.py -it 5 -ood fashion -wh -c supp-size-study/mlp-bayesian-mesu-S=256-N=180000 -fits
+python main.py -it 5 -ood fashion -wh -c supp-size-study/mlp-bayesian-mesu-S=256-N=300000 -fits
+python main.py -it 5 -ood fashion -wh -c supp-size-study/mlp-bayesian-mesu-S=256-N=600000 -fits
+python main.py -it 5 -ood fashion -wh -c supp-size-study/mlp-bayesian-mesu-S=256-N=1200000 -fits
+python main.py -it 5 -ood fashion -wh -c supp-size-study/mlp-bayesian-mesu-S=256-N=2400000 -fits
+python main.py -it 5 -ood fashion -wh -c supp-size-study/mlp-bayesian-mesu-S=256-N=1e15 -fits
+python main.py -it 5 -ood fashion -wh -c supp-size-study/mlp-bayesian-mesu-S=512-N=180000 -fits
+python main.py -it 5 -ood fashion -wh -c supp-size-study/mlp-bayesian-mesu-S=512-N=300000 -fits
+python main.py -it 5 -ood fashion -wh -c supp-size-study/mlp-bayesian-mesu-S=512-N=600000 -fits
+python main.py -it 5 -ood fashion -wh -c supp-size-study/mlp-bayesian-mesu-S=512-N=120000 -fits
+python main.py -it 5 -ood fashion -wh -c supp-size-study/mlp-bayesian-mesu-S=512-N=2400000 -fits
+python main.py -it 5 -ood fashion -wh -c supp-size-study/mlp-bayesian-mesu-S=512-N=1e15 -fits
+python main.py -it 5 -ood fashion -wh -c supp-size-study/mlp-bayesian-mesu-S=1024-N=180000 -fits
+python main.py -it 5 -ood fashion -wh -c supp-size-study/mlp-bayesian-mesu-S=1024-N=300000 -fits
+python main.py -it 5 -ood fashion -wh -c supp-size-study/mlp-bayesian-mesu-S=1024-N=600000 -fits
+python main.py -it 5 -ood fashion -wh -c supp-size-study/mlp-bayesian-mesu-S=1024-N=1200000 -fits
+python main.py -it 5 -ood fashion -wh -c supp-size-study/mlp-bayesian-mesu-S=1024-N=2400000 -fits
+python main.py -it 5 -ood fashion -wh -c supp-size-study/mlp-bayesian-mesu-S=1024-N=1e15 -fits
 ```
 
-## Files for figures
+### Figure PMNIST - Presynaptic Consolidation
+
+```bash
+```
+
+### Figure PMNIST - UCB
+
+```bash
+```
+
+## Notebooks generating figures
+
+### Main figures
 
 Two files are available in the repository:
 
@@ -76,6 +104,15 @@ These two files are linked with two folders, respectively `RESULTS-PMNIST` and `
 
 The resulting figures will be saved in a folder named `output-figures` in the main directory.
 
+### Supplementary figures
+
+The supplementary figures are generated in the same way as the main figures. The notebooks are:
+- [Figure PMNIST - Study of hyperparameter N](./figure-pmnist-N-study.ipynb)
+- [Figure PMNIST - Presynaptic Consolidation](./figure-pmnist-presynaptic.ipynb)
+- [Figure PMNIST - UCB](./figure-pmnist-ucb.ipynb)
+
+The results of the experiments must be saved in the `RESULTS-N-STUDY` folder for the first notebook, and in the `RESULTS-PRESYNAPTIC` and `RESULTS-UCB` folders for the other two notebooks.
+
 ## Authors
 
 - [Djohan BONNET](https://scholar.google.com/citations?user=1cSwOPIAAAAJ&hl=en)
@@ -84,6 +121,16 @@ The resulting figures will be saved in a folder named `output-figures` in the ma
 ## Citation
 
 Please reference this work as
+
+@misc{bonnet2025bayesiancontinuallearningforgetting,
+      title={Bayesian continual learning and forgetting in neural networks}, 
+      author={Djohan Bonnet and Kellian Cottart and Tifenn Hirtzlin and Tarcisius Januel and Thomas Dalgaty and Elisa Vianello and Damien Querlioz},
+      year={2025},
+      eprint={2504.13569},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2504.13569},
+}
 
 ## License
 
