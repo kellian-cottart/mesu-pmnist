@@ -84,11 +84,13 @@ python main.py -it 5 -ood fashion -wh -c supp-size-study/mlp-bayesian-mesu-S=102
 ### Figure PMNIST - Presynaptic Consolidation
 
 ```bash
+python main.py -it 5 -c supp-presynaptic/mlp-bayesian-mesu -fits
 ```
 
 ### Figure PMNIST - UCB
 
 ```bash
+python main.py -it 5 -c supp-ucb/mlp-bayesian-mesu-small -fits
 ```
 
 ## Notebooks generating figures
@@ -109,7 +111,7 @@ The resulting figures will be saved in a folder named `output-figures` in the ma
 The supplementary figures are generated in the same way as the main figures. The notebooks are:
 - [Figure PMNIST - Study of hyperparameter N](./figure-pmnist-N-study.ipynb)
 - [Figure PMNIST - Presynaptic Consolidation](./figure-pmnist-presynaptic.ipynb)
-- [Figure PMNIST - UCB](./figure-pmnist-ucb.ipynb)
+- [Figure PMNIST - UCB](./figure-pmnist-UCB.ipynb)
 
 The results of the experiments must be saved in the `RESULTS-N-STUDY` folder for the first notebook, and in the `RESULTS-PRESYNAPTIC` and `RESULTS-UCB` folders for the other two notebooks.
 
