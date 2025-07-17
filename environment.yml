@@ -1,0 +1,20 @@
+name: bayesian
+channels:
+  - pytorch
+  - nvidia
+  - defaults
+dependencies:
+  - python=3.12
+  - nvidia::cudatoolkit
+  - pytorch-cuda=12.1
+  - matplotlib
+  - torchvision=0.18.0=py312_cu121
+  - pip
+  - pip:
+      - idx2numpy
+      - tqdm
+      - jax[cuda12]==0.5.3
+      - equinox
+      - optax
+      - seaborn
+      - gdown

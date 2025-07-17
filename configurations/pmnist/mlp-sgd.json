@@ -1,0 +1,18 @@
+{
+  "network": "mlp",
+  "network_params": {
+    "layers": [784, 50, 10],
+    "activation_fn": "relu"
+  },
+  "optimizer": "sgd",
+  "optimizer_params": {
+    "lr": 0.002
+  },
+  "task": "PermutedMNIST",
+  "n_tasks": 200,
+  "epochs": 1,
+  "train_batch_size": 1,
+  "test_batch_size": 128,
+  "max_parallel_permutation": 50,
+  "seed": 1000
+}
