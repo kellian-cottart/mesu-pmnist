@@ -154,7 +154,7 @@ python main.py -it 5 -c supp-presynaptic/mlp-bayesian-mesu -fits
 The following command generate the simulations for the supplementary table on UCB. Once the simulations are done, and the results must be moved in the `RESULTS-UCB` folder, the notebook `figure-pmnist-UCB.ipynb` can be used to generate Supplementary Table 6. Comparison of Metaplasticity from Synaptic Uncertainties (MESU) and Uncertainty-guided Continual Bayesian Neural Networks (UCB).
 
 ```bash
-python main.py -it 5 -c supp-ucb/mlp-bayesian-mesu-small -fits
+python main.py -it 10 -c supp-ucb/mlp-bayesian-mesu-small -fits
 ```
 
 ### Supplementary Note 8: Inference time and accuracy, Supplementary Note 11: Detailed trade-off analysis of MESU and FOO-VB Diagonal
