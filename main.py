@@ -198,6 +198,12 @@ if __name__ == "__main__":
                 elif "pmnist" in OOD:
                     _, test_ood, shape_ood, num_classes_ood = loader.task_selection(
                         "mnist")
+                    # permute the test_ood dataset with a random permutation
+                    ood_permutation = randperm(prod(tensor(shape_ood)))
+                    images, labels = test_ood[0][:]
+                    images = images.reshape(
+                        images.shape[0], -1)[:, ood_permutation].reshape(images.shape)
+                    test_ood[0] = TensorDataset(images, labels)
                 ood_dataloader = to_dataloader(
                     test_ood, configuration["test_batch_size"], num_classes, fits_in_memory=FITS_IN_MEMORY)
                 ookey, rng = jax.random.split(rng)
